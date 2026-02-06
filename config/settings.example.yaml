@@ -1,0 +1,19 @@
+env: "local"
+
+database:
+  local:
+    type: "sqlite"
+    path: "data/health_data.db"
+  
+  production:
+    type: "mysql"
+    host: "localhost"
+    port: 3306
+    database: "health_management"
+    user: "your_mysql_user"
+    password: "your_mysql_password"
+
+withings:
+  client_id: "your_client_id"
+  client_secret: "your_client_secret"
+  redirect_uri: "http://localhost:8501/callback"
