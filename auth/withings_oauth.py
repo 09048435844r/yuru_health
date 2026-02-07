@@ -1,10 +1,10 @@
 import json
-import yaml
 import requests
 from pathlib import Path
 from typing import Dict, Any, Optional
 from datetime import datetime, timedelta
 from urllib.parse import urlencode
+from src.utils.secrets_loader import load_secrets
 
 
 class WithingsOAuth:
@@ -13,16 +13,11 @@ class WithingsOAuth:
     REDIRECT_URI = "http://localhost:8501"
     
     def __init__(self, secrets_path: str = "config/secrets.yaml", token_path: str = "config/token_withings.json"):
-        self.secrets_path = Path(secrets_path)
         self.token_path = Path(token_path)
-        self.secrets = self._load_secrets()
+        self.secrets = load_secrets(secrets_path)
         self.client_id = self.secrets["withings"]["client_id"]
         self.consumer_secret = self.secrets["withings"]["consumer_secret"]
         self.tokens = self._load_tokens()
-    
-    def _load_secrets(self) -> Dict[str, Any]:
-        with open(self.secrets_path, "r", encoding="utf-8") as f:
-            return yaml.safe_load(f)
     
     def _load_tokens(self) -> Dict[str, Any]:
         if self.token_path.exists():

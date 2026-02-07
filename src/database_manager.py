@@ -1,21 +1,15 @@
 import json
-import yaml
-from pathlib import Path
 from typing import Optional, Dict, Any, List
 from supabase import create_client, Client
+from src.utils.secrets_loader import load_secrets
 
 
 class DatabaseManager:
     def __init__(self, secrets_path: str = "config/secrets.yaml"):
-        self.secrets_path = Path(secrets_path)
-        self.secrets = self._load_secrets()
+        self.secrets = load_secrets(secrets_path)
         self.supabase: Client = self._create_client()
         self.env = "cloud"
         self.db_config = {"type": "supabase"}
-        
-    def _load_secrets(self) -> Dict[str, Any]:
-        with open(self.secrets_path, "r", encoding="utf-8") as f:
-            return yaml.safe_load(f)
     
     def _create_client(self) -> Client:
         supabase_config = self.secrets.get("supabase", {})

@@ -1,9 +1,8 @@
-import yaml
 import requests
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
-from pathlib import Path
 from src.base_fetcher import BaseFetcher
+from src.utils.secrets_loader import load_secrets
 
 
 class OuraFetcher(BaseFetcher):
@@ -11,13 +10,8 @@ class OuraFetcher(BaseFetcher):
     
     def __init__(self, config: Dict[str, Any], secrets_path: str = "config/secrets.yaml"):
         super().__init__(config)
-        self.secrets_path = Path(secrets_path)
-        self.secrets = self._load_secrets()
+        self.secrets = load_secrets(secrets_path)
         self.personal_token = self.secrets["oura"]["personal_token"]
-    
-    def _load_secrets(self) -> Dict[str, Any]:
-        with open(self.secrets_path, "r", encoding="utf-8") as f:
-            return yaml.safe_load(f)
     
     def authenticate(self) -> bool:
         return self.personal_token is not None and self.personal_token != "your_oura_personal_token"

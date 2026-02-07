@@ -3,6 +3,7 @@ import json
 from typing import Dict, Any, Optional
 from pathlib import Path
 from src.evaluators.base_evaluator import BaseEvaluator
+from src.utils.secrets_loader import load_secrets
 
 try:
     import google.generativeai as genai
@@ -32,9 +33,8 @@ class GeminiEvaluator(BaseEvaluator):
     def _load_api_key(self) -> Optional[str]:
         """Gemini APIキーを読み込む"""
         try:
-            with open(self.secrets_path, "r", encoding="utf-8") as f:
-                secrets = yaml.safe_load(f)
-                return secrets.get("gemini", {}).get("api_key")
+            secrets = load_secrets(str(self.secrets_path))
+            return secrets.get("gemini", {}).get("api_key")
         except Exception:
             return None
     

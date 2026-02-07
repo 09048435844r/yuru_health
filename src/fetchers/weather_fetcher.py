@@ -1,9 +1,8 @@
 import json
-import yaml
 import requests
 from typing import Dict, Any, Optional, Tuple
-from pathlib import Path
 from datetime import datetime
+from src.utils.secrets_loader import load_secrets
 
 
 class WeatherFetcher:
@@ -14,19 +13,10 @@ class WeatherFetcher:
     BASE_URL = "https://api.openweathermap.org/data/2.5/weather"
     
     def __init__(self, secrets_path: str = "config/secrets.yaml"):
-        self.secrets_path = Path(secrets_path)
-        self.secrets = self._load_secrets()
+        self.secrets = load_secrets(secrets_path)
         self.api_key = self.secrets.get("openweathermap", {}).get("api_key")
         self.default_lat = self.secrets.get("openweathermap", {}).get("default_lat")
         self.default_lon = self.secrets.get("openweathermap", {}).get("default_lon")
-    
-    def _load_secrets(self) -> Dict[str, Any]:
-        """設定ファイルを読み込む"""
-        try:
-            with open(self.secrets_path, "r", encoding="utf-8") as f:
-                return yaml.safe_load(f) or {}
-        except Exception:
-            return {}
     
     def is_available(self) -> bool:
         """API利用可能か確認"""
