@@ -68,7 +68,7 @@ class GoogleFitFetcher:
                 
                 results.append({
                     "user_id": user_id,
-                    "measured_at": bucket_start,
+                    "date": bucket_start,
                     "data_type": "steps",
                     "value": steps,
                     "raw_data": json.dumps(bucket),
@@ -106,7 +106,7 @@ class GoogleFitFetcher:
                 if weight_kg is not None:
                     results.append({
                         "user_id": user_id,
-                        "measured_at": measured_at,
+                        "date": measured_at,
                         "data_type": "weight",
                         "value": weight_kg,
                         "raw_data": json.dumps(point),
@@ -142,7 +142,7 @@ class GoogleFitFetcher:
                 
                 results.append({
                     "user_id": user_id,
-                    "measured_at": start_time.strftime("%Y-%m-%d"),
+                    "date": start_time.strftime("%Y-%m-%d"),
                     "data_type": "sleep",
                     "value": duration_minutes,
                     "raw_data": json.dumps(session),

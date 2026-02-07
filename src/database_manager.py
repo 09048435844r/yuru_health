@@ -94,11 +94,11 @@ class DatabaseManager:
         )
         return response.data[0] if response.data else None
     
-    def insert_google_fit_data(self, user_id: str, measured_at: str, data_type: str,
+    def insert_google_fit_data(self, user_id: str, date: str, data_type: str,
                                value: Any, raw_data: Any):
         data = {
             "user_id": user_id,
-            "measured_at": measured_at,
+            "date": date,
             "data_type": data_type,
             "value": value,
             "raw_data": self._parse_raw_data(raw_data),
@@ -107,7 +107,7 @@ class DatabaseManager:
     
     def get_google_fit_data(self, user_id: Optional[str] = None, data_type: Optional[str] = None,
                             limit: int = 100) -> List[Dict[str, Any]]:
-        query = self.supabase.table("google_fit_data").select("*").order("measured_at", desc=True).limit(limit)
+        query = self.supabase.table("google_fit_data").select("*").order("date", desc=True).limit(limit)
         if user_id:
             query = query.eq("user_id", user_id)
         if data_type:

@@ -411,7 +411,7 @@ def main():
                                     try:
                                         db_manager.insert_google_fit_data(
                                             user_id=record["user_id"],
-                                            measured_at=record["measured_at"],
+                                            date=record["date"],
                                             data_type=record["data_type"],
                                             value=record["value"],
                                             raw_data=record["raw_data"],
@@ -433,16 +433,16 @@ def main():
                 if gfit_steps:
                     st.markdown("**📊 歩数 (直近7日)**")
                     df_steps = pd.DataFrame(gfit_steps)
-                    df_steps["measured_at"] = pd.to_datetime(df_steps["measured_at"])
-                    df_steps = df_steps.sort_values("measured_at")
-                    st.bar_chart(df_steps.set_index("measured_at")["value"], use_container_width=True)
+                    df_steps["date"] = pd.to_datetime(df_steps["date"])
+                    df_steps = df_steps.sort_values("date")
+                    st.bar_chart(df_steps.set_index("date")["value"], use_container_width=True)
                 
                 if gfit_sleep:
                     st.markdown("**😴 睡眠時間 (直近7日, 分)**")
                     df_sleep = pd.DataFrame(gfit_sleep)
-                    df_sleep["measured_at"] = pd.to_datetime(df_sleep["measured_at"])
-                    df_sleep = df_sleep.sort_values("measured_at")
-                    st.bar_chart(df_sleep.set_index("measured_at")["value"], use_container_width=True)
+                    df_sleep["date"] = pd.to_datetime(df_sleep["date"])
+                    df_sleep = df_sleep.sort_values("date")
+                    st.bar_chart(df_sleep.set_index("date")["value"], use_container_width=True)
                 
                 if st.button("🚪 Google Fit ログアウト"):
                     google_oauth.logout()
