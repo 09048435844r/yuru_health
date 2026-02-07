@@ -25,13 +25,16 @@ class WeatherFetcher:
         try:
             with open(self.secrets_path, "r", encoding="utf-8") as f:
                 return yaml.safe_load(f) or {}
-        except Exception as e:
-            print(f"[WeatherFetcher] Failed to load secrets: {e}")
+        except Exception:
             return {}
     
     def is_available(self) -> bool:
         """API利用可能か確認"""
         return self.api_key is not None
+    
+    @property
+    def last_error(self):
+        return getattr(self, '_last_error', None)
     
     def fetch_weather(self, lat: Optional[float] = None, lon: Optional[float] = None) -> Dict[str, Any]:
         """
@@ -45,7 +48,6 @@ class WeatherFetcher:
             dict: 天気データ（source, lat, lon, weather_summary, temp, humidity, pressure, raw_data）
         """
         if not self.is_available():
-            print("[WeatherFetcher] API key not configured")
             return {}
         
         # 座標の決定とソースの判定
@@ -56,9 +58,9 @@ class WeatherFetcher:
             lon = self.default_lon
             source = "config_fallback"
         else:
-            print("[WeatherFetcher] No coordinates available")
             return {}
         
+        self._last_error = None
         try:
             params = {
                 "lat": lat,
@@ -69,6 +71,10 @@ class WeatherFetcher:
             }
             
             response = requests.get(self.BASE_URL, params=params, timeout=10)
+            
+            if response.status_code != 200:
+                self._last_error = f"API error {response.status_code}: {response.text}"
+            
             response.raise_for_status()
             data = response.json()
             
@@ -94,13 +100,13 @@ class WeatherFetcher:
             }
         
         except requests.exceptions.Timeout:
-            print("[WeatherFetcher] API request timed out")
+            self._last_error = "API request timed out"
             return {}
         except requests.exceptions.RequestException as e:
-            print(f"[WeatherFetcher] API request failed: {e}")
+            self._last_error = f"API request failed: {e}"
             return {}
         except Exception as e:
-            print(f"[WeatherFetcher] Unexpected error: {e}")
+            self._last_error = f"Unexpected error: {e}"
             return {}
     
     def _get_weather_emoji(self, icon_code: str) -> str:

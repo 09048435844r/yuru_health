@@ -140,8 +140,10 @@ def refresh_data(db_manager: DatabaseManager, user_id: str = "user_001"):
                             raw_data=weather["raw_data"]
                         )
                         st.session_state["latest_weather"] = weather
+                    elif weather_fetcher.last_error:
+                        st.error(f"🌤️ 天気取得エラー: {weather_fetcher.last_error}")
             except Exception as e:
-                print(f"[Weather] {str(e)}")
+                st.error(f"🌤️ 天気取得エラー: {str(e)}")
         
         st.success("✅ データを更新しました")
         st.rerun()
@@ -211,6 +213,8 @@ def main():
         temp = weather_info.get("temp")
         temp_str = f" {temp}℃" if temp is not None else ""
         st.caption(f"📍 {city}: {summary}{temp_str}")
+    else:
+        st.warning("天気データが取得できませんでした。🔄 ボタンでデータを更新してください。")
     
     # データ更新ボタン
     col1, col2 = st.columns([3, 1])

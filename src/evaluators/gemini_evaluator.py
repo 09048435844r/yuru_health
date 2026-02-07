@@ -43,11 +43,8 @@ class GeminiEvaluator(BaseEvaluator):
         try:
             with open(self.settings_path, "r", encoding="utf-8") as f:
                 settings = yaml.safe_load(f)
-                model_name = settings.get("gemini", {}).get("model_name", "gemini-1.5-flash")
-                print(f"[DEBUG] Loaded model_name from settings: {model_name}")
-                return model_name
-        except Exception as e:
-            print(f"[DEBUG] Failed to load model_name: {e}, using default")
+                return settings.get("gemini", {}).get("model_name", "gemini-1.5-flash")
+        except Exception:
             return "gemini-1.5-flash"
     
     def _load_prompts(self) -> Dict[str, str]:
@@ -72,12 +69,9 @@ class GeminiEvaluator(BaseEvaluator):
         if GENAI_AVAILABLE and self.api_key:
             try:
                 genai.configure(api_key=self.api_key)
-                print(f"[DEBUG] Initializing Gemini model: {self.model_name}")
                 self.model = genai.GenerativeModel(self.model_name)
-                print(f"[DEBUG] Model initialized successfully: {self.model_name}")
-            except Exception as e:
-                print(f"[DEBUG] Failed to initialize Gemini model: {e}")
-                print(f"[DEBUG] Model name attempted: {self.model_name}")
+            except Exception:
+                pass
     
     def is_available(self) -> bool:
         """評価機能が利用可能か確認"""
