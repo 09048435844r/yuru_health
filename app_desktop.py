@@ -18,7 +18,7 @@ st.set_page_config(
 
 @st.cache_resource
 def get_database_manager():
-    return DatabaseManager("config/settings.yaml")
+    return DatabaseManager("config/secrets.yaml")
 
 
 @st.cache_resource
@@ -408,10 +408,7 @@ def database_management_page(db_manager: DatabaseManager):
         st.info(f"**DB種別:** {db_manager.db_config['type']}")
     
     with col2:
-        if db_manager.db_config['type'] == 'sqlite':
-            db_path = Path(db_manager.db_config['path'])
-            st.info(f"**DBパス:** {db_path}")
-            st.info(f"**存在:** {'✅' if db_path.exists() else '❌'}")
+        st.info(f"**接続先:** Supabase (PostgreSQL)")
     
     st.markdown("---")
     
@@ -430,9 +427,8 @@ def database_management_page(db_manager: DatabaseManager):
     with col2:
         if st.button("🔍 接続テスト"):
             try:
-                db_manager.connect()
-                st.success("✅ データベースに接続できました")
-                db_manager.close()
+                db_manager.get_weight_data(limit=1)
+                st.success("✅ Supabaseに接続できました")
             except Exception as e:
                 st.error(f"❌ 接続エラー: {str(e)}")
     
@@ -448,7 +444,7 @@ def database_management_page(db_manager: DatabaseManager):
         if st.button("🗑️ 全データ削除", type="secondary"):
             if confirm == "DELETE":
                 try:
-                    db_manager.execute_query("DELETE FROM weight_data")
+                    db_manager.supabase.table("weight_data").delete().neq("id", 0).execute()
                     st.success("✅ 全データを削除しました")
                 except Exception as e:
                     st.error(f"❌ エラー: {str(e)}")

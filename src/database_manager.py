@@ -1,285 +1,116 @@
-import sqlite3
+import json
 import yaml
 from pathlib import Path
 from typing import Optional, Dict, Any, List
-from contextlib import contextmanager
+from supabase import create_client, Client
 
 
 class DatabaseManager:
-    def __init__(self, config_path: str = "config/settings.yaml"):
-        self.config_path = Path(config_path)
-        self.config = self._load_config()
-        self.env = self.config.get("env", "local")
-        self.db_config = self.config["database"][self.env]
-        self.connection = None
+    def __init__(self, secrets_path: str = "config/secrets.yaml"):
+        self.secrets_path = Path(secrets_path)
+        self.secrets = self._load_secrets()
+        self.supabase: Client = self._create_client()
+        self.env = "cloud"
+        self.db_config = {"type": "supabase"}
         
-    def _load_config(self) -> Dict[str, Any]:
-        with open(self.config_path, "r", encoding="utf-8") as f:
+    def _load_secrets(self) -> Dict[str, Any]:
+        with open(self.secrets_path, "r", encoding="utf-8") as f:
             return yaml.safe_load(f)
     
+    def _create_client(self) -> Client:
+        supabase_config = self.secrets.get("supabase", {})
+        url = supabase_config.get("url", "")
+        key = supabase_config.get("key", "")
+        if not url or not key:
+            raise ValueError("Supabase URL and Key must be set in config/secrets.yaml")
+        return create_client(url, key)
+    
     def connect(self):
-        if self.db_config["type"] == "sqlite":
-            db_path = Path(self.db_config["path"])
-            db_path.parent.mkdir(parents=True, exist_ok=True)
-            self.connection = sqlite3.connect(str(db_path), check_same_thread=False)
-            self.connection.row_factory = sqlite3.Row
-        elif self.db_config["type"] == "mysql":
-            import pymysql
-            self.connection = pymysql.connect(
-                host=self.db_config["host"],
-                port=self.db_config["port"],
-                user=self.db_config["user"],
-                password=self.db_config["password"],
-                database=self.db_config["database"],
-                charset="utf8mb4",
-                cursorclass=pymysql.cursors.DictCursor
-            )
-        else:
-            raise ValueError(f"Unsupported database type: {self.db_config['type']}")
-        
-        return self.connection
+        pass
     
     def close(self):
-        if self.connection:
-            self.connection.close()
-            self.connection = None
-    
-    @contextmanager
-    def get_connection(self):
-        try:
-            if not self.connection:
-                self.connect()
-            yield self.connection
-        finally:
-            pass
-    
-    def execute_query(self, query: str, params: Optional[tuple] = None) -> List[Dict[str, Any]]:
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            try:
-                if params:
-                    cursor.execute(query, params)
-                else:
-                    cursor.execute(query)
-                
-                if query.strip().upper().startswith("SELECT"):
-                    if self.db_config["type"] == "sqlite":
-                        return [dict(row) for row in cursor.fetchall()]
-                    else:
-                        return cursor.fetchall()
-                else:
-                    conn.commit()
-                    return []
-            finally:
-                cursor.close()
-    
-    def execute_many(self, query: str, params_list: List[tuple]):
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            try:
-                cursor.executemany(query, params_list)
-                conn.commit()
-            finally:
-                cursor.close()
+        pass
     
     def init_tables(self):
-        if self.db_config["type"] == "sqlite":
-            create_table_sql = """
-            CREATE TABLE IF NOT EXISTS weight_data (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id TEXT NOT NULL,
-                measured_at TIMESTAMP NOT NULL,
-                weight_kg REAL NOT NULL,
-                raw_data TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-            """
-        else:
-            create_table_sql = """
-            CREATE TABLE IF NOT EXISTS weight_data (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                user_id VARCHAR(255) NOT NULL,
-                measured_at DATETIME NOT NULL,
-                weight_kg DECIMAL(5,2) NOT NULL,
-                raw_data TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                INDEX idx_user_measured (user_id, measured_at)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-            """
-        
-        self.execute_query(create_table_sql)
-        
-        if self.db_config["type"] == "sqlite":
-            create_oura_table_sql = """
-            CREATE TABLE IF NOT EXISTS oura_data (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id TEXT NOT NULL,
-                measured_at TIMESTAMP NOT NULL,
-                activity_score INTEGER,
-                sleep_score INTEGER,
-                readiness_score INTEGER,
-                steps INTEGER,
-                total_sleep_duration INTEGER,
-                raw_data TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-            """
-        else:
-            create_oura_table_sql = """
-            CREATE TABLE IF NOT EXISTS oura_data (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                user_id VARCHAR(255) NOT NULL,
-                measured_at DATETIME NOT NULL,
-                activity_score INT,
-                sleep_score INT,
-                readiness_score INT,
-                steps INT,
-                total_sleep_duration INT,
-                raw_data TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                INDEX idx_user_measured (user_id, measured_at)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-            """
-        
-        self.execute_query(create_oura_table_sql)
-        
-        # environmental_logs テーブル
-        if self.db_config["type"] == "sqlite":
-            create_env_table_sql = """
-            CREATE TABLE IF NOT EXISTS environmental_logs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp DATETIME NOT NULL,
-                source TEXT NOT NULL,
-                latitude REAL,
-                longitude REAL,
-                weather_summary TEXT,
-                temp REAL,
-                humidity INTEGER,
-                pressure INTEGER,
-                raw_data TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-            """
-        else:
-            create_env_table_sql = """
-            CREATE TABLE IF NOT EXISTS environmental_logs (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                timestamp DATETIME NOT NULL,
-                source VARCHAR(50) NOT NULL,
-                latitude DECIMAL(10,7),
-                longitude DECIMAL(10,7),
-                weather_summary TEXT,
-                temp DECIMAL(5,2),
-                humidity INT,
-                pressure INT,
-                raw_data TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                INDEX idx_timestamp (timestamp)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-            """
-        
-        self.execute_query(create_env_table_sql)
-        
+        pass
+    
     def insert_weight_data(self, user_id: str, measured_at: str, weight_kg: float, raw_data: str):
-        query = """
-        INSERT INTO weight_data (user_id, measured_at, weight_kg, raw_data)
-        VALUES (?, ?, ?, ?)
-        """ if self.db_config["type"] == "sqlite" else """
-        INSERT INTO weight_data (user_id, measured_at, weight_kg, raw_data)
-        VALUES (%s, %s, %s, %s)
-        """
-        
-        self.execute_query(query, (user_id, measured_at, weight_kg, raw_data))
+        data = {
+            "user_id": user_id,
+            "measured_at": measured_at,
+            "weight_kg": weight_kg,
+            "raw_data": self._parse_raw_data(raw_data),
+        }
+        self.supabase.table("weight_data").insert(data).execute()
     
     def get_weight_data(self, user_id: Optional[str] = None, limit: int = 100) -> List[Dict[str, Any]]:
+        query = self.supabase.table("weight_data").select("*").order("measured_at", desc=True).limit(limit)
         if user_id:
-            query = """
-            SELECT * FROM weight_data 
-            WHERE user_id = ? 
-            ORDER BY measured_at DESC 
-            LIMIT ?
-            """ if self.db_config["type"] == "sqlite" else """
-            SELECT * FROM weight_data 
-            WHERE user_id = %s 
-            ORDER BY measured_at DESC 
-            LIMIT %s
-            """
-            return self.execute_query(query, (user_id, limit))
-        else:
-            query = """
-            SELECT * FROM weight_data 
-            ORDER BY measured_at DESC 
-            LIMIT ?
-            """ if self.db_config["type"] == "sqlite" else """
-            SELECT * FROM weight_data 
-            ORDER BY measured_at DESC 
-            LIMIT %s
-            """
-            return self.execute_query(query, (limit,))
+            query = query.eq("user_id", user_id)
+        response = query.execute()
+        return response.data
     
     def insert_oura_data(self, user_id: str, measured_at: str, activity_score: Optional[int], 
                         sleep_score: Optional[int], readiness_score: Optional[int], 
                         steps: Optional[int], total_sleep_duration: Optional[int], raw_data: str):
-        query = """
-        INSERT INTO oura_data (user_id, measured_at, activity_score, sleep_score, readiness_score, steps, total_sleep_duration, raw_data)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """ if self.db_config["type"] == "sqlite" else """
-        INSERT INTO oura_data (user_id, measured_at, activity_score, sleep_score, readiness_score, steps, total_sleep_duration, raw_data)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-        """
-        
-        self.execute_query(query, (user_id, measured_at, activity_score, sleep_score, readiness_score, steps, total_sleep_duration, raw_data))
+        data = {
+            "user_id": user_id,
+            "measured_at": measured_at,
+            "activity_score": activity_score,
+            "sleep_score": sleep_score,
+            "readiness_score": readiness_score,
+            "steps": steps,
+            "total_sleep_duration": total_sleep_duration,
+            "raw_data": self._parse_raw_data(raw_data),
+        }
+        self.supabase.table("oura_data").insert(data).execute()
     
     def get_oura_data(self, user_id: Optional[str] = None, limit: int = 100) -> List[Dict[str, Any]]:
+        query = self.supabase.table("oura_data").select("*").order("measured_at", desc=True).limit(limit)
         if user_id:
-            query = """
-            SELECT * FROM oura_data 
-            WHERE user_id = ? 
-            ORDER BY measured_at DESC 
-            LIMIT ?
-            """ if self.db_config["type"] == "sqlite" else """
-            SELECT * FROM oura_data 
-            WHERE user_id = %s 
-            ORDER BY measured_at DESC 
-            LIMIT %s
-            """
-            return self.execute_query(query, (user_id, limit))
-        else:
-            query = """
-            SELECT * FROM oura_data 
-            ORDER BY measured_at DESC 
-            LIMIT ?
-            """ if self.db_config["type"] == "sqlite" else """
-            SELECT * FROM oura_data 
-            ORDER BY measured_at DESC 
-            LIMIT %s
-            """
-            return self.execute_query(query, (limit,))
+            query = query.eq("user_id", user_id)
+        response = query.execute()
+        return response.data
     
     def insert_environmental_log(self, timestamp: str, source: str, 
                                   latitude: Optional[float], longitude: Optional[float],
                                   weather_summary: Optional[str], temp: Optional[float],
                                   humidity: Optional[int], pressure: Optional[int],
                                   raw_data: Optional[str]):
-        query = """
-        INSERT INTO environmental_logs (timestamp, source, latitude, longitude, weather_summary, temp, humidity, pressure, raw_data)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """ if self.db_config["type"] == "sqlite" else """
-        INSERT INTO environmental_logs (timestamp, source, latitude, longitude, weather_summary, temp, humidity, pressure, raw_data)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """
-        
-        self.execute_query(query, (timestamp, source, latitude, longitude, weather_summary, temp, humidity, pressure, raw_data))
+        data = {
+            "timestamp": timestamp,
+            "source": source,
+            "latitude": latitude,
+            "longitude": longitude,
+            "weather_summary": weather_summary,
+            "temp": temp,
+            "humidity": humidity,
+            "pressure": pressure,
+            "raw_data": self._parse_raw_data(raw_data),
+        }
+        self.supabase.table("environmental_logs").insert(data).execute()
     
     def get_latest_environmental_log(self) -> Optional[Dict[str, Any]]:
-        query = """
-        SELECT * FROM environmental_logs 
-        ORDER BY timestamp DESC 
-        LIMIT 1
-        """
-        results = self.execute_query(query)
-        return results[0] if results else None
+        response = (
+            self.supabase.table("environmental_logs")
+            .select("*")
+            .order("timestamp", desc=True)
+            .limit(1)
+            .execute()
+        )
+        return response.data[0] if response.data else None
+    
+    def execute_query(self, query: str, params: Optional[tuple] = None) -> List[Dict[str, Any]]:
+        raise NotImplementedError("Direct SQL queries are not supported with Supabase. Use table methods instead.")
+    
+    def _parse_raw_data(self, raw_data: Any) -> Any:
+        if raw_data is None:
+            return None
+        if isinstance(raw_data, dict):
+            return raw_data
+        if isinstance(raw_data, str):
+            try:
+                return json.loads(raw_data)
+            except (json.JSONDecodeError, TypeError):
+                return raw_data
+        return raw_data

@@ -47,8 +47,4 @@ Thumbs.db
 
 # Streamlit
 .streamlit/secrets.toml
-config/secrets.yaml
-config/secrets.yaml
-venv/
-__pycache__/
 .env

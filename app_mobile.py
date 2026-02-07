@@ -28,7 +28,7 @@ st.set_page_config(
 
 @st.cache_resource
 def get_database_manager():
-    return DatabaseManager("config/settings.yaml")
+    return DatabaseManager("config/secrets.yaml")
 
 
 @st.cache_resource
