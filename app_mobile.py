@@ -68,10 +68,15 @@ def fetch_latest_data(db_manager: DatabaseManager, user_id: str = "user_001"):
     }
 
 
-def refresh_data(db_manager: DatabaseManager):
+def refresh_data(db_manager: DatabaseManager, user_id: str = "user_001"):
     """データを更新"""
     try:
         with st.spinner("データを更新中..."):
+            end_dt = datetime.now()
+            start_dt = end_dt - timedelta(days=7)
+            start_str = start_dt.strftime("%Y-%m-%d")
+            end_str = end_dt.strftime("%Y-%m-%d")
+            
             # Withingsデータ取得
             withings_oauth = get_withings_oauth()
             if withings_oauth.is_authenticated():
@@ -79,26 +84,38 @@ def refresh_data(db_manager: DatabaseManager):
                     with open("config/settings.yaml", "r", encoding="utf-8") as f:
                         config = yaml.safe_load(f)
                     fetcher = WithingsFetcher(config, withings_oauth)
-                    end_date = datetime.now()
-                    start_date = end_date - timedelta(days=7)
-                    data = fetcher.fetch_data(start_date, end_date)
+                    data = fetcher.fetch_data(user_id, start_str, end_str)
                     
                     if data:
                         for record in data:
-                            db_manager.insert_weight_data(record)
+                            db_manager.insert_weight_data(
+                                user_id=record["user_id"],
+                                measured_at=record["measured_at"],
+                                weight_kg=record["weight_kg"],
+                                raw_data=record.get("raw_data", "")
+                            )
                 except Exception as e:
                     st.warning(f"Withings: {str(e)}")
             
             # Ouraデータ取得
             try:
-                fetcher = OuraFetcher()
-                end_date = datetime.now()
-                start_date = end_date - timedelta(days=7)
-                data = fetcher.fetch_data(start_date, end_date)
+                with open("config/settings.yaml", "r", encoding="utf-8") as f:
+                    config = yaml.safe_load(f)
+                fetcher = OuraFetcher(config)
+                data = fetcher.fetch_data(user_id, start_str, end_str)
                 
                 if data:
                     for record in data:
-                        db_manager.insert_oura_data(record)
+                        db_manager.insert_oura_data(
+                            user_id=record["user_id"],
+                            measured_at=record["measured_at"],
+                            activity_score=record.get("activity_score"),
+                            sleep_score=record.get("sleep_score"),
+                            readiness_score=record.get("readiness_score"),
+                            steps=record.get("steps"),
+                            total_sleep_duration=record.get("total_sleep_duration"),
+                            raw_data=record.get("raw_data", "")
+                        )
             except Exception as e:
                 st.warning(f"Oura: {str(e)}")
             
