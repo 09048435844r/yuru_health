@@ -16,7 +16,7 @@ class WithingsOAuth:
         self.token_path = Path(token_path)
         self.secrets = load_secrets(secrets_path)
         self.client_id = self.secrets["withings"]["client_id"]
-        self.consumer_secret = self.secrets["withings"]["consumer_secret"]
+        self.client_secret = self.secrets["withings"]["client_secret"]
         self.tokens = self._load_tokens()
     
     def _load_tokens(self) -> Dict[str, Any]:
@@ -46,7 +46,7 @@ class WithingsOAuth:
             "action": "requesttoken",
             "grant_type": "authorization_code",
             "client_id": self.client_id,
-            "client_secret": self.consumer_secret,
+            "client_secret": self.client_secret,
             "code": code,
             "redirect_uri": self.REDIRECT_URI
         }
@@ -81,7 +81,7 @@ class WithingsOAuth:
             "action": "requesttoken",
             "grant_type": "refresh_token",
             "client_id": self.client_id,
-            "client_secret": self.consumer_secret,
+            "client_secret": self.client_secret,
             "refresh_token": self.tokens["refresh_token"]
         }
         
