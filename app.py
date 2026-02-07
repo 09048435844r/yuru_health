@@ -10,6 +10,8 @@ from src.fetchers.oura_fetcher import OuraFetcher
 from src.fetchers.weather_fetcher import WeatherFetcher
 from auth.withings_oauth import WithingsOAuth
 from src.evaluators.gemini_evaluator import GeminiEvaluator
+from auth.google_oauth import GoogleOAuth
+from src.fetchers.google_fit_fetcher import GoogleFitFetcher, GOOGLE_FIT_AVAILABLE
 
 try:
     from streamlit_js_eval import get_geolocation
@@ -50,6 +52,11 @@ def get_gemini_evaluator(model_name: str):
 
 def get_weather_fetcher():
     return WeatherFetcher()
+
+
+@st.cache_resource
+def get_google_oauth():
+    return GoogleOAuth()
 
 
 def fetch_latest_data(db_manager: DatabaseManager, user_id: str = "user_001"):
@@ -370,6 +377,81 @@ def main():
             else:
                 st.info("データがありません")
     
+    # Google Fit データ表示
+    google_oauth = get_google_oauth()
+    if google_oauth.is_available():
+        # OAuth コールバック処理
+        query_params = st.query_params
+        auth_code = query_params.get("code")
+        if auth_code and not google_oauth.is_authenticated():
+            if google_oauth.exchange_code_for_token(auth_code):
+                st.query_params.clear()
+                st.rerun()
+        
+        with st.expander("🏃 Google Fit データ", expanded=False):
+            if google_oauth.is_authenticated():
+                st.success("✅ Google Fit: 認証済み")
+                
+                if st.button("📥 Google Fit データ取得"):
+                    try:
+                        creds = google_oauth.get_credentials()
+                        if creds:
+                            fetcher = GoogleFitFetcher(creds)
+                            end_dt = datetime.now()
+                            start_dt = end_dt - timedelta(days=7)
+                            start_str = start_dt.strftime("%Y-%m-%d")
+                            end_str = end_dt.strftime("%Y-%m-%d")
+                            
+                            with st.spinner("Google Fit からデータ取得中..."):
+                                fit_data = fetcher.fetch_all("user_001", start_str, end_str)
+                            
+                            saved_count = 0
+                            for data_type, records in fit_data.items():
+                                for record in records:
+                                    try:
+                                        db_manager.insert_google_fit_data(
+                                            user_id=record["user_id"],
+                                            measured_at=record["measured_at"],
+                                            data_type=record["data_type"],
+                                            value=record["value"],
+                                            raw_data=record["raw_data"],
+                                        )
+                                        saved_count += 1
+                                    except Exception:
+                                        pass
+                            
+                            st.success(f"✅ {saved_count}件のデータを保存しました")
+                        else:
+                            st.error("認証情報の取得に失敗しました。再ログインしてください。")
+                    except Exception as e:
+                        st.error(f"❌ Google Fit エラー: {e}")
+                
+                # 保存済みデータ表示
+                gfit_steps = db_manager.get_google_fit_data(user_id="user_001", data_type="steps", limit=7)
+                gfit_sleep = db_manager.get_google_fit_data(user_id="user_001", data_type="sleep", limit=7)
+                
+                if gfit_steps:
+                    st.markdown("**📊 歩数 (直近7日)**")
+                    df_steps = pd.DataFrame(gfit_steps)
+                    df_steps["measured_at"] = pd.to_datetime(df_steps["measured_at"])
+                    df_steps = df_steps.sort_values("measured_at")
+                    st.bar_chart(df_steps.set_index("measured_at")["value"], use_container_width=True)
+                
+                if gfit_sleep:
+                    st.markdown("**😴 睡眠時間 (直近7日, 分)**")
+                    df_sleep = pd.DataFrame(gfit_sleep)
+                    df_sleep["measured_at"] = pd.to_datetime(df_sleep["measured_at"])
+                    df_sleep = df_sleep.sort_values("measured_at")
+                    st.bar_chart(df_sleep.set_index("measured_at")["value"], use_container_width=True)
+                
+                if st.button("🚪 Google Fit ログアウト"):
+                    google_oauth.logout()
+                    st.rerun()
+            else:
+                st.info("Google Fit に接続して、Samsung Health のデータを取得できます。")
+                auth_url = google_oauth.get_authorization_url()
+                st.link_button("🔗 Google Fit にログイン", auth_url)
+    
     # 設定（サイドバー - 折りたたみ）
     with st.sidebar:
         st.header("⚙️ 設定")
@@ -381,6 +463,12 @@ def main():
             else:
                 st.warning("⚠️ Withings: 未認証")
                 st.caption("初回設定が必要な場合は app.py を使用してください")
+            
+            if google_oauth.is_available():
+                if google_oauth.is_authenticated():
+                    st.success("✅ Google Fit: 認証済み")
+                else:
+                    st.warning("⚠️ Google Fit: 未認証")
         
         with st.expander("ℹ️ システム情報", expanded=False):
             st.info(f"**環境:** {db_manager.env}")

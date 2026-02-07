@@ -94,6 +94,27 @@ class DatabaseManager:
         )
         return response.data[0] if response.data else None
     
+    def insert_google_fit_data(self, user_id: str, measured_at: str, data_type: str,
+                               value: Any, raw_data: Any):
+        data = {
+            "user_id": user_id,
+            "measured_at": measured_at,
+            "data_type": data_type,
+            "value": value,
+            "raw_data": self._parse_raw_data(raw_data),
+        }
+        self.supabase.table("google_fit_data").insert(data).execute()
+    
+    def get_google_fit_data(self, user_id: Optional[str] = None, data_type: Optional[str] = None,
+                            limit: int = 100) -> List[Dict[str, Any]]:
+        query = self.supabase.table("google_fit_data").select("*").order("measured_at", desc=True).limit(limit)
+        if user_id:
+            query = query.eq("user_id", user_id)
+        if data_type:
+            query = query.eq("data_type", data_type)
+        response = query.execute()
+        return response.data
+    
     def execute_query(self, query: str, params: Optional[tuple] = None) -> List[Dict[str, Any]]:
         raise NotImplementedError("Direct SQL queries are not supported with Supabase. Use table methods instead.")
     
