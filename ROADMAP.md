@@ -1,55 +1,32 @@
-# 💚 YuruHealth Development Roadmap
+# YuruHealth v3.1 Roadmap
 
-## 🏆 Project Concept
-**"Input Minimal, Data Maximal" (入力は最小限、データは最大限)**
-- **Mobile First:** Galaxy Fold (Main Screen) での日常使いに最適化。
-- **Data Lake Strategy:** 将来のAI分析を見据え、あらゆるログ（生体、環境、活動）を "Raw JSON" で収集・保存する。
-- **Abstracted:** デバイス変更に強いデータベース設計。
+## 🏆 Philosophy
+- **Input Minimal**: 手動入力は極限まで減らす。
+- **Data Maximal**: Rawデータ（JSON）は全て保存する（Data Lake思想）。
+- **Mobile First**: Galaxy Foldでの閲覧・操作を最優先。
+- **Cloud Native**: どこからでもアクセス可能、かつサーバーレス。
 
-## 📊 Current Status
-- **Version:** v3.0 (Phase 1 Complete)
-- **Environment:** Local (WSL2) + Tailscale
-- **Database:** SQLite (Migratable to Cloud)
+## ✅ Phase 1: Foundation (完了)
+- Streamlit UI (Mobile Optimized)
+- Withings / Oura Ring API 連携
+- Environmental Logs (OpenWeatherMap + GPS)
 
----
+## � Phase 2: Cloud Migration (Current Focus)
+- **目的**: ローカル環境（WSL2）からの脱却とスマホアクセス。
+- **Infrastructure**:
+    - App: Streamlit Community Cloud (GitHub連携)
+    - DB: Supabase (PostgreSQL)
+- **Action**: SQLite廃止、Supabaseクライアント実装、デプロイ。
 
-## 📅 Implementation Phases
+## 🩺 Phase 3: Samsung Health Integration
+- **目的**: Galaxy Watch / Samsung Health の詳細データ取り込み。
+- **Strategy**: Samsung Health -> Health Connect -> Google Fit -> **Google Cloud API** -> YuruHealth.
+- **Action**: Google Cloud Project設定、Google Fit Fetcher実装。
 
-### ✅ Phase 1: Environment & Basics (Completed)
-- [x] **Mobile UI Overhaul:** `st.metric` for key stats, clean layout for Galaxy Fold.
-- [x] **AI Comments:** Daily health evaluation by Gemini (Witty/Logical modes).
-- [x] **Weather Logging:** Automated OpenWeatherMap integration (Hybrid: GPS + Config).
-- [x] **Database Expansion:** Added `environmental_logs` table with raw JSON support.
+## 🎵 Phase 4: Context Awareness (Music & Life)
+- **目的**: 音楽と健康データの相関分析。
+- **Action**: Last.fm API連携、Listening Historyの取り込み。
 
-### 🚧 Phase 2: Digital & Creative Activity (Next)
-- [ ] **Music Log (YouTube Music):**
-    - [ ] Last.fm API integration for scrobbling history (via Pano Scrobbler).
-    - [ ] `creative_logs` table creation.
-    - [ ] Correlation analysis (Music vs Sleep Score).
-- [ ] **Work Log:**
-    - [ ] GitHub contributions visualization.
-    - [ ] PC usage time tracking (via simple script).
-
-### 📅 Phase 3: Historical Data Import (Time Machine)
-- [ ] **Google Takeout Import:**
-    - [ ] Script to parse Location History (JSON).
-    - [ ] Merge past weather data based on location/time.
-- [ ] **Legacy Health Data:** Import from Apple Health/CSV.
-
-### 💊 Phase 4: Intake & Micro-Interactions
-- [ ] **One-Tap Logger UI:**
-    - [ ] Buttons for [💊 Supple], [☕ Coffee], [🍺 Alcohol].
-    - [ ] `intake_logs` table creation.
-- [ ] **Correlations:** A/B testing for supplements.
-
-### ☁️ Phase 5: Cloud Migration (Future)
-- [ ] **Database:** Migrate SQLite to PostgreSQL/BigQuery.
-- [ ] **Hosting:** Deploy to Streamlit Cloud or Cloud Run.
-
----
-
-## 📂 Tech Stack & Rules
-- **Language:** Python 3.11+
-- **Framework:** Streamlit (Mobile Optimized)
-- **AI:** Gemini 1.5/2.0 (via Google GenAI SDK)
-- **Version Control:** Git
+## � Phase 5: Advanced AI Analysis
+- **目的**: 蓄積されたRawデータ（JSON）のDeep Dive。
+- **Action**: LangChain / Gemini Pro を用いた自然言語でのデータベースクエリ（Text-to-SQL）。
