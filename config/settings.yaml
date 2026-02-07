@@ -19,4 +19,5 @@ withings:
   redirect_uri: "http://localhost:8501/callback"
 
 gemini:
-  model_name: "gemini-3-pro-preview"
+  model_name: "gemini-3-flash-preview"
+  # model_name: "gemini-3-pro-preview"
