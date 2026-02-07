@@ -147,6 +147,43 @@ class DatabaseManager:
         
         self.execute_query(create_oura_table_sql)
         
+        # environmental_logs テーブル
+        if self.db_config["type"] == "sqlite":
+            create_env_table_sql = """
+            CREATE TABLE IF NOT EXISTS environmental_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp DATETIME NOT NULL,
+                source TEXT NOT NULL,
+                latitude REAL,
+                longitude REAL,
+                weather_summary TEXT,
+                temp REAL,
+                humidity INTEGER,
+                pressure INTEGER,
+                raw_data TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        else:
+            create_env_table_sql = """
+            CREATE TABLE IF NOT EXISTS environmental_logs (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                timestamp DATETIME NOT NULL,
+                source VARCHAR(50) NOT NULL,
+                latitude DECIMAL(10,7),
+                longitude DECIMAL(10,7),
+                weather_summary TEXT,
+                temp DECIMAL(5,2),
+                humidity INT,
+                pressure INT,
+                raw_data TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_timestamp (timestamp)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """
+        
+        self.execute_query(create_env_table_sql)
+        
     def insert_weight_data(self, user_id: str, measured_at: str, weight_kg: float, raw_data: str):
         query = """
         INSERT INTO weight_data (user_id, measured_at, weight_kg, raw_data)
@@ -222,3 +259,27 @@ class DatabaseManager:
             LIMIT %s
             """
             return self.execute_query(query, (limit,))
+    
+    def insert_environmental_log(self, timestamp: str, source: str, 
+                                  latitude: Optional[float], longitude: Optional[float],
+                                  weather_summary: Optional[str], temp: Optional[float],
+                                  humidity: Optional[int], pressure: Optional[int],
+                                  raw_data: Optional[str]):
+        query = """
+        INSERT INTO environmental_logs (timestamp, source, latitude, longitude, weather_summary, temp, humidity, pressure, raw_data)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """ if self.db_config["type"] == "sqlite" else """
+        INSERT INTO environmental_logs (timestamp, source, latitude, longitude, weather_summary, temp, humidity, pressure, raw_data)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """
+        
+        self.execute_query(query, (timestamp, source, latitude, longitude, weather_summary, temp, humidity, pressure, raw_data))
+    
+    def get_latest_environmental_log(self) -> Optional[Dict[str, Any]]:
+        query = """
+        SELECT * FROM environmental_logs 
+        ORDER BY timestamp DESC 
+        LIMIT 1
+        """
+        results = self.execute_query(query)
+        return results[0] if results else None
