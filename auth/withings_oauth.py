@@ -10,7 +10,6 @@ from src.utils.secrets_loader import load_secrets
 class WithingsOAuth:
     AUTH_URL = "https://account.withings.com/oauth2_user/authorize2"
     TOKEN_URL = "https://wbsapi.withings.net/v2/oauth2"
-    DEFAULT_REDIRECT_URI = "http://localhost:8501"
     
     def __init__(self, secrets_path: str = "config/secrets.yaml", token_path: str = "config/token_withings.json"):
         self.token_path = Path(token_path)
@@ -18,7 +17,7 @@ class WithingsOAuth:
         withings_config = self.secrets.get("withings", {})
         self.client_id = withings_config.get("client_id", "")
         self.client_secret = withings_config.get("client_secret", "")
-        self.redirect_uri = withings_config.get("redirect_uri", self.DEFAULT_REDIRECT_URI)
+        self.redirect_uri = withings_config.get("redirect_uri", "")
         self.tokens = self._load_tokens()
     
     def _load_tokens(self) -> Dict[str, Any]:

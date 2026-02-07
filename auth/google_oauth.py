@@ -22,7 +22,7 @@ class GoogleOAuth:
         self.google_config = self.secrets.get("google", {})
         self.client_id = self.google_config.get("client_id", "")
         self.client_secret = self.google_config.get("client_secret", "")
-        self.redirect_uris = self.google_config.get("redirect_uris", ["http://localhost:8501/"])
+        self.redirect_uris = self.google_config.get("redirect_uris", [])
     
     def _get_redirect_uri(self) -> str:
         """現在の環境に合ったリダイレクトURIを返す"""
@@ -40,7 +40,7 @@ class GoogleOAuth:
         for uri in self.redirect_uris:
             if "localhost" in uri:
                 return uri
-        return self.redirect_uris[0] if self.redirect_uris else "http://localhost:8501/"
+        return self.redirect_uris[0] if self.redirect_uris else ""
     
     def _build_client_config(self) -> Dict[str, Any]:
         """Google OAuth用のクライアント設定を構築"""
