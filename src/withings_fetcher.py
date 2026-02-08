@@ -8,11 +8,12 @@ from auth.withings_oauth import WithingsOAuth
 class WithingsFetcher(BaseFetcher):
     API_BASE_URL = "https://wbsapi.withings.net"
     
-    def __init__(self, config: Dict[str, Any], oauth_client: Optional[WithingsOAuth] = None):
+    def __init__(self, config: Dict[str, Any], oauth_client: Optional[WithingsOAuth] = None, db_manager=None):
         super().__init__(config)
         if oauth_client is None:
             raise ValueError("oauth_client (WithingsOAuth) is required")
         self.oauth_client = oauth_client
+        self.db_manager = db_manager
         self.access_token: Optional[str] = None
     
     def authenticate(self) -> bool:
@@ -35,11 +36,30 @@ class WithingsFetcher(BaseFetcher):
         
         raw_response = self._fetch_measurements(int(start.timestamp()), int(end.timestamp()))
         
+        # Data Lake: 生データを解析前に保存
+        self._save_to_data_lake(user_id, raw_response)
+        
         parsed_data = self._parse_measurements(raw_response, user_id)
         
         self.update_fetch_time()
         
         return parsed_data
+    
+    def _save_to_data_lake(self, user_id: str, raw_response: Dict[str, Any]):
+        """APIレスポンスの各測定グループを raw_data_lake に保存"""
+        if not self.db_manager:
+            return
+        if raw_response.get("status") != 0:
+            return
+        for grp in raw_response.get("body", {}).get("measuregrps", []):
+            recorded_at = datetime.fromtimestamp(grp["date"]).strftime("%Y-%m-%d")
+            self.db_manager.save_raw_data(
+                user_id=user_id,
+                recorded_at=recorded_at,
+                source="withings",
+                category="measure",
+                payload=grp,
+            )
     
     def _fetch_measurements(self, startdate: int, enddate: int) -> Dict[str, Any]:
         url = f"{self.API_BASE_URL}/measure"

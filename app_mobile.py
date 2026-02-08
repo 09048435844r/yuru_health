@@ -46,8 +46,8 @@ def get_gemini_evaluator(model_name: str):
     return GeminiEvaluator({}, model_name=model_name)
 
 
-def get_weather_fetcher():
-    return WeatherFetcher()
+def get_weather_fetcher(db_manager=None):
+    return WeatherFetcher(db_manager=db_manager)
 
 
 def fetch_latest_data(db_manager: DatabaseManager, user_id: str = "user_001"):
@@ -81,7 +81,7 @@ def refresh_data(db_manager: DatabaseManager, user_id: str = "user_001"):
                 try:
                     with open("config/settings.yaml", "r", encoding="utf-8") as f:
                         config = yaml.safe_load(f)
-                    fetcher = WithingsFetcher(config, withings_oauth)
+                    fetcher = WithingsFetcher(config, withings_oauth, db_manager=db_manager)
                     data = fetcher.fetch_data(user_id, start_str, end_str)
                     
                     if data:
@@ -120,7 +120,7 @@ def refresh_data(db_manager: DatabaseManager, user_id: str = "user_001"):
             
             # 天気データ取得
             try:
-                weather_fetcher = get_weather_fetcher()
+                weather_fetcher = get_weather_fetcher(db_manager=db_manager)
                 if weather_fetcher.is_available():
                     lat = st.session_state.get("gps_lat")
                     lon = st.session_state.get("gps_lon")

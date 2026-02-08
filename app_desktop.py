@@ -320,7 +320,7 @@ def fetch_data_page(db_manager: DatabaseManager):
             try:
                 with st.spinner("Withings APIからデータを取得中..."):
                     withings_config = get_withings_config()
-                    fetcher = WithingsFetcher(withings_config, withings_oauth)
+                    fetcher = WithingsFetcher(withings_config, withings_oauth, db_manager=db_manager)
                     
                     data = fetcher.fetch_data(
                         user_id=user_id,

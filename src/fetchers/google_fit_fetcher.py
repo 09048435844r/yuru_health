@@ -16,10 +16,11 @@ class GoogleFitFetcher:
     Samsung Health -> Health Connect -> Google Fit 経由のデータを取得
     """
     
-    def __init__(self, credentials: "Credentials"):
+    def __init__(self, credentials: "Credentials", db_manager=None):
         if not GOOGLE_FIT_AVAILABLE:
             raise ImportError("google-api-python-client is required")
         self.credentials = credentials
+        self.db_manager = db_manager
         self.fitness_service = build("fitness", "v1", credentials=credentials)
     
     def _time_millis(self, dt: datetime) -> int:
@@ -53,6 +54,9 @@ class GoogleFitFetcher:
             response = self.fitness_service.users().dataset().aggregate(
                 userId="me", body=body
             ).execute()
+            
+            # Data Lake: 生データを解析前に保存
+            self._save_to_data_lake(user_id, response, "steps")
             
             results = []
             for bucket in response.get("bucket", []):
@@ -95,6 +99,9 @@ class GoogleFitFetcher:
                 datasetId=dataset_id,
             ).execute()
             
+            # Data Lake: 生データを解析前に保存
+            self._save_to_data_lake(user_id, response, "weight")
+            
             results = []
             for point in response.get("point", []):
                 measured_at = self._nano_to_datetime(point.get("startTimeNanos", "0"))
@@ -130,6 +137,9 @@ class GoogleFitFetcher:
                 endTime=end_dt.isoformat() + "Z",
                 activityType=72,  # Sleep
             ).execute()
+            
+            # Data Lake: 生データを解析前に保存
+            self._save_to_data_lake(user_id, response, "sleep")
             
             results = []
             for session in response.get("session", []):
@@ -175,6 +185,19 @@ class GoogleFitFetcher:
             pass
         
         return results
+    
+    def _save_to_data_lake(self, user_id: str, raw_response: Dict[str, Any], category: str):
+        """APIレスポンス全体を raw_data_lake に保存"""
+        if not self.db_manager:
+            return
+        recorded_at = datetime.now().strftime("%Y-%m-%d")
+        self.db_manager.save_raw_data(
+            user_id=user_id,
+            recorded_at=recorded_at,
+            source="google_fit",
+            category=category,
+            payload=raw_response,
+        )
     
     def _parse_date_range(self, start_date: Optional[str], end_date: Optional[str]):
         """日付範囲をパース"""

@@ -12,8 +12,9 @@ class WeatherFetcher:
     
     BASE_URL = "https://api.openweathermap.org/data/2.5/weather"
     
-    def __init__(self, secrets_path: str = "config/secrets.yaml"):
+    def __init__(self, secrets_path: str = "config/secrets.yaml", db_manager=None):
         self.secrets = load_secrets(secrets_path)
+        self.db_manager = db_manager
         self.api_key = self.secrets.get("openweathermap", {}).get("api_key")
         self.default_lat = self.secrets.get("openweathermap", {}).get("default_lat")
         self.default_lon = self.secrets.get("openweathermap", {}).get("default_lon")
@@ -67,6 +68,16 @@ class WeatherFetcher:
             
             response.raise_for_status()
             data = response.json()
+            
+            # Data Lake: 生データを解析前に保存
+            if self.db_manager:
+                self.db_manager.save_raw_data(
+                    user_id="system",
+                    recorded_at=datetime.now().strftime("%Y-%m-%d"),
+                    source="weather",
+                    category="current_weather",
+                    payload=data,
+                )
             
             # レスポンスをパース
             weather_desc = data.get("weather", [{}])[0].get("description", "不明")
