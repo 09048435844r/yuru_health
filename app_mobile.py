@@ -99,21 +99,22 @@ def refresh_data(db_manager: DatabaseManager, user_id: str = "user_001"):
             try:
                 with open("config/settings.yaml", "r", encoding="utf-8") as f:
                     config = yaml.safe_load(f)
-                fetcher = OuraFetcher(config)
-                data = fetcher.fetch_data(user_id, start_str, end_str)
-                
-                if data:
-                    for record in data:
-                        db_manager.insert_oura_data(
-                            user_id=record["user_id"],
-                            measured_at=record["measured_at"],
-                            activity_score=record.get("activity_score"),
-                            sleep_score=record.get("sleep_score"),
-                            readiness_score=record.get("readiness_score"),
-                            steps=record.get("steps"),
-                            total_sleep_duration=record.get("total_sleep_duration"),
-                            raw_data=record.get("raw_data", "")
-                        )
+                fetcher = OuraFetcher(config, db_manager=db_manager)
+                if fetcher.authenticate():
+                    data = fetcher.fetch_data(user_id, start_str, end_str)
+                    
+                    if data:
+                        for record in data:
+                            db_manager.insert_oura_data(
+                                user_id=record["user_id"],
+                                measured_at=record["measured_at"],
+                                activity_score=record.get("activity_score"),
+                                sleep_score=record.get("sleep_score"),
+                                readiness_score=record.get("readiness_score"),
+                                steps=record.get("steps"),
+                                total_sleep_duration=record.get("total_sleep_duration"),
+                                raw_data=record.get("raw_data", "")
+                            )
             except Exception as e:
                 st.warning(f"Oura: {str(e)}")
             

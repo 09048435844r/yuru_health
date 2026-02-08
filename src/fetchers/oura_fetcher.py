@@ -8,13 +8,15 @@ from src.utils.secrets_loader import load_secrets
 class OuraFetcher(BaseFetcher):
     API_BASE_URL = "https://api.ouraring.com/v2/usercollection"
     
-    def __init__(self, config: Dict[str, Any], secrets_path: str = "config/secrets.yaml"):
+    def __init__(self, config: Dict[str, Any], db_manager=None, secrets_path: str = "config/secrets.yaml"):
         super().__init__(config)
+        self.db_manager = db_manager
         self.secrets = load_secrets(secrets_path)
-        self.personal_token = self.secrets["oura"]["personal_token"]
+        oura_config = self.secrets.get("oura", {})
+        self.personal_token = oura_config.get("personal_token", "")
     
     def authenticate(self) -> bool:
-        return self.personal_token is not None and self.personal_token != "your_oura_personal_token"
+        return bool(self.personal_token) and self.personal_token != "your_oura_personal_token"
     
     def fetch_data(self, user_id: str, start_date: Optional[str] = None, end_date: Optional[str] = None) -> List[Dict[str, Any]]:
         if not self.authenticate():
@@ -30,15 +32,38 @@ class OuraFetcher(BaseFetcher):
         else:
             start = datetime.fromisoformat(start_date)
         
-        daily_activity = self._fetch_daily_activity(start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d"))
-        daily_sleep = self._fetch_daily_sleep(start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d"))
-        daily_readiness = self._fetch_daily_readiness(start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d"))
+        start_str = start.strftime("%Y-%m-%d")
+        end_str = end.strftime("%Y-%m-%d")
+        
+        daily_activity = self._fetch_daily_activity(start_str, end_str)
+        daily_sleep = self._fetch_daily_sleep(start_str, end_str)
+        daily_readiness = self._fetch_daily_readiness(start_str, end_str)
+        
+        # Data Lake: 生データを解析前に保存
+        self._save_to_data_lake(user_id, daily_activity, "activity")
+        self._save_to_data_lake(user_id, daily_sleep, "sleep")
+        self._save_to_data_lake(user_id, daily_readiness, "readiness")
         
         parsed_data = self._parse_oura_data(daily_activity, daily_sleep, daily_readiness, user_id)
         
         self.update_fetch_time()
         
         return parsed_data
+    
+    def _save_to_data_lake(self, user_id: str, raw_response: Dict[str, Any], category: str):
+        """APIレスポンスの各レコードを raw_data_lake に保存"""
+        if not self.db_manager:
+            return
+        for item in raw_response.get("data", []):
+            recorded_at = item.get("day", "")
+            if recorded_at:
+                self.db_manager.save_raw_data(
+                    user_id=user_id,
+                    recorded_at=recorded_at,
+                    source="oura",
+                    category=category,
+                    payload=item,
+                )
     
     def _fetch_daily_activity(self, start_date: str, end_date: str) -> Dict[str, Any]:
         url = f"{self.API_BASE_URL}/daily_activity"

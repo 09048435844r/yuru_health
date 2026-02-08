@@ -146,7 +146,7 @@ def api_connection_page(db_manager: DatabaseManager):
         
         if st.button("🔍 接続テスト", type="primary"):
             try:
-                oura_fetcher = OuraFetcher({})
+                oura_fetcher = OuraFetcher({}, db_manager=db_manager)
                 if oura_fetcher.authenticate():
                     st.success("✅ Oura Ring APIに接続できました")
                 else:
@@ -351,7 +351,7 @@ def fetch_data_page(db_manager: DatabaseManager):
     
     else:
         try:
-            oura_fetcher = OuraFetcher({})
+            oura_fetcher = OuraFetcher({}, db_manager=db_manager)
             if not oura_fetcher.authenticate():
                 st.warning("⚠️ Oura Ring Personal Tokenが設定されていません。`config/secrets.yaml` に設定してください。")
                 return
@@ -362,7 +362,7 @@ def fetch_data_page(db_manager: DatabaseManager):
         if st.button("📥 Ouraデータ取得", type="primary"):
             try:
                 with st.spinner("Oura APIからデータを取得中..."):
-                    oura_fetcher = OuraFetcher({})
+                    oura_fetcher = OuraFetcher({}, db_manager=db_manager)
                     
                     data = oura_fetcher.fetch_data(
                         user_id=user_id,

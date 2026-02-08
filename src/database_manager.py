@@ -115,6 +115,21 @@ class DatabaseManager:
         response = query.execute()
         return response.data
     
+    def save_raw_data(self, user_id: str, recorded_at: str, source: str,
+                      category: str, payload: Any):
+        """raw_data_lake に生データを保存する"""
+        try:
+            data = {
+                "user_id": user_id,
+                "recorded_at": recorded_at,
+                "source": source,
+                "category": category,
+                "payload": payload if isinstance(payload, dict) else self._parse_raw_data(payload),
+            }
+            self.supabase.table("raw_data_lake").insert(data).execute()
+        except Exception:
+            pass
+    
     def save_token(self, user_id: str, provider: str, token_data: Dict[str, Any]):
         """OAuth トークンを upsert (insert or update) する"""
         data = {
