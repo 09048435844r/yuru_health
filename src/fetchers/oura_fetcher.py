@@ -57,7 +57,6 @@ class OuraFetcher(BaseFetcher):
             response.raise_for_status()
             return response.json()
         except Exception as e:
-            print(f"Error fetching daily activity: {e}")
             return {"data": []}
     
     def _fetch_daily_sleep(self, start_date: str, end_date: str) -> Dict[str, Any]:
@@ -77,7 +76,6 @@ class OuraFetcher(BaseFetcher):
             response.raise_for_status()
             return response.json()
         except Exception as e:
-            print(f"Error fetching daily sleep: {e}")
             return {"data": []}
     
     def _fetch_daily_readiness(self, start_date: str, end_date: str) -> Dict[str, Any]:
@@ -97,7 +95,6 @@ class OuraFetcher(BaseFetcher):
             response.raise_for_status()
             return response.json()
         except Exception as e:
-            print(f"Error fetching daily readiness: {e}")
             return {"data": []}
     
     def _parse_oura_data(self, activity: Dict[str, Any], sleep: Dict[str, Any], 

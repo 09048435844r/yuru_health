@@ -1,5 +1,5 @@
 import streamlit as st
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional
 from src.utils.secrets_loader import load_secrets
 
 try:
@@ -74,8 +74,8 @@ class GoogleOAuth:
         st.session_state["google_credentials"] = creds
         try:
             self.db_manager.save_token(self.user_id, self.PROVIDER, self._credentials_to_dict(creds))
-        except Exception as e:
-            print(f"Failed to save Google token to Supabase: {e}")
+        except Exception:
+            pass
     
     def _get_redirect_uri(self) -> str:
         """現在の環境に合ったリダイレクトURIを返す"""

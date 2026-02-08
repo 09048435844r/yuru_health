@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import yaml
-from pathlib import Path
 from datetime import datetime, timedelta
 from src.database_manager import DatabaseManager
 from src.withings_fetcher import WithingsFetcher

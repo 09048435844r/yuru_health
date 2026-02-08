@@ -1,5 +1,4 @@
 import yaml
-import json
 from typing import Dict, Any, Optional
 from pathlib import Path
 from src.evaluators.base_evaluator import BaseEvaluator
@@ -53,8 +52,7 @@ class GeminiEvaluator(BaseEvaluator):
             with open(self.prompts_path, "r", encoding="utf-8") as f:
                 prompts_data = yaml.safe_load(f)
                 return prompts_data
-        except Exception as e:
-            print(f"Failed to load prompts: {e}")
+        except Exception:
             return {
                 "logical": {
                     "template": "健康データを分析してください：{weight_summary}\n{oura_summary}"

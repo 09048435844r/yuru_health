@@ -1,8 +1,6 @@
 import streamlit as st
 import pandas as pd
 import yaml
-import json
-from pathlib import Path
 from datetime import datetime, timedelta
 from src.database_manager import DatabaseManager
 from src.withings_fetcher import WithingsFetcher
@@ -221,8 +219,8 @@ def main():
                 if coords.get("latitude") and coords.get("longitude"):
                     st.session_state["gps_lat"] = coords["latitude"]
                     st.session_state["gps_lon"] = coords["longitude"]
-        except Exception as e:
-            print(f"[GPS] Failed to get geolocation: {e}")
+        except Exception:
+            pass
     
     # 環境情報表示（さりげなく）
     env_log = db_manager.get_latest_environmental_log()

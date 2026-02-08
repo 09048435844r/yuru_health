@@ -32,8 +32,8 @@ class WithingsOAuth:
         """Supabase にトークンを保存する"""
         try:
             self.db_manager.save_token(self.user_id, self.PROVIDER, tokens)
-        except Exception as e:
-            print(f"Failed to save token to Supabase: {e}")
+        except Exception:
+            pass
         self.tokens = tokens
     
     def get_authorization_url(self, state: str = "random_state") -> str:
@@ -122,8 +122,7 @@ class WithingsOAuth:
             if datetime.now() >= expires_datetime - timedelta(minutes=5):
                 try:
                     self.refresh_access_token()
-                except Exception as e:
-                    print(f"Failed to refresh token: {e}")
+                except Exception:
                     return None
         
         return self.tokens.get("access_token")
