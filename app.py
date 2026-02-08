@@ -198,6 +198,19 @@ def main():
     db_manager.init_tables()
     gemini_settings = load_gemini_settings()
     
+    # Withings OAuth コールバック処理
+    withings_oauth = get_withings_oauth(db_manager)
+    query_params = st.query_params
+    withings_code = query_params.get("code")
+    withings_state = query_params.get("state", "")
+    if withings_code and withings_state.startswith("withings_") and not withings_oauth.is_authenticated():
+        try:
+            withings_oauth.exchange_code_for_token(withings_code)
+            st.query_params.clear()
+            st.rerun()
+        except Exception as e:
+            st.error(f"Withings認証エラー: {e}")
+    
     # GPS位置情報の取得（session_stateで再リロードループを防止）
     if GEOLOCATION_AVAILABLE and "gps_requested" not in st.session_state:
         st.session_state["gps_requested"] = True
@@ -457,12 +470,18 @@ def main():
         st.header("⚙️ 設定")
         
         with st.expander("🔐 API連携", expanded=False):
-            withings_oauth = get_withings_oauth(db_manager)
             if withings_oauth.is_authenticated():
                 st.success("✅ Withings: 認証済み")
+                if st.button("🔓 Withings認証解除"):
+                    withings_oauth.clear_tokens()
+                    st.rerun()
             else:
                 st.warning("⚠️ Withings: 未認証")
-                st.caption("初回設定が必要な場合は app.py を使用してください")
+                if withings_oauth.client_id:
+                    auth_url = withings_oauth.get_authorization_url(state="withings_auth")
+                    st.link_button("🔗 Withings にログイン", auth_url)
+                else:
+                    st.caption("Withings の client_id が設定されていません")
             
             if google_oauth.is_available():
                 if google_oauth.is_authenticated():
