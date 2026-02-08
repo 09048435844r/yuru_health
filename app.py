@@ -34,8 +34,8 @@ def get_database_manager():
 
 
 @st.cache_resource
-def get_withings_oauth():
-    return WithingsOAuth()
+def get_withings_oauth(_db_manager):
+    return WithingsOAuth(_db_manager)
 
 
 @st.cache_resource
@@ -55,8 +55,8 @@ def get_weather_fetcher():
 
 
 @st.cache_resource
-def get_google_oauth():
-    return GoogleOAuth()
+def get_google_oauth(_db_manager):
+    return GoogleOAuth(_db_manager)
 
 
 def fetch_latest_data(db_manager: DatabaseManager, user_id: str = "user_001"):
@@ -85,7 +85,7 @@ def refresh_data(db_manager: DatabaseManager, user_id: str = "user_001"):
             end_str = end_dt.strftime("%Y-%m-%d")
             
             # Withingsデータ取得
-            withings_oauth = get_withings_oauth()
+            withings_oauth = get_withings_oauth(db_manager)
             if withings_oauth.is_authenticated():
                 try:
                     with open("config/settings.yaml", "r", encoding="utf-8") as f:
@@ -378,7 +378,7 @@ def main():
                 st.info("データがありません")
     
     # Google Fit データ表示
-    google_oauth = get_google_oauth()
+    google_oauth = get_google_oauth(db_manager)
     if google_oauth.is_available():
         # OAuth コールバック処理
         query_params = st.query_params
@@ -457,7 +457,7 @@ def main():
         st.header("⚙️ 設定")
         
         with st.expander("🔐 API連携", expanded=False):
-            withings_oauth = get_withings_oauth()
+            withings_oauth = get_withings_oauth(db_manager)
             if withings_oauth.is_authenticated():
                 st.success("✅ Withings: 認証済み")
             else:

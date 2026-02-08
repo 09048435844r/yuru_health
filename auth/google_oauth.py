@@ -5,6 +5,7 @@ from src.utils.secrets_loader import load_secrets
 try:
     from google_auth_oauthlib.flow import Flow
     from google.oauth2.credentials import Credentials
+    from google.auth.transport.requests import Request
     GOOGLE_AUTH_AVAILABLE = True
 except ImportError:
     GOOGLE_AUTH_AVAILABLE = False
@@ -16,13 +17,65 @@ class GoogleOAuth:
         "https://www.googleapis.com/auth/fitness.body.read",
         "https://www.googleapis.com/auth/fitness.sleep.read",
     ]
+    PROVIDER = "google"
     
-    def __init__(self, secrets_path: str = "config/secrets.yaml"):
+    def __init__(self, db_manager, secrets_path: str = "config/secrets.yaml", user_id: str = "user_001"):
+        self.db_manager = db_manager
+        self.user_id = user_id
         self.secrets = load_secrets(secrets_path)
         self.google_config = self.secrets.get("google", {})
         self.client_id = self.google_config.get("client_id", "")
         self.client_secret = self.google_config.get("client_secret", "")
         self.redirect_uris = self.google_config.get("redirect_uris", [])
+        self._restore_credentials()
+    
+    def _credentials_to_dict(self, creds: "Credentials") -> Dict[str, Any]:
+        """Credentials オブジェクトを dict に変換"""
+        return {
+            "token": creds.token,
+            "refresh_token": creds.refresh_token,
+            "token_uri": creds.token_uri,
+            "client_id": creds.client_id,
+            "client_secret": creds.client_secret,
+            "scopes": list(creds.scopes) if creds.scopes else self.SCOPES,
+        }
+    
+    def _dict_to_credentials(self, data: Dict[str, Any]) -> Optional["Credentials"]:
+        """dict から Credentials オブジェクトを復元"""
+        if not GOOGLE_AUTH_AVAILABLE or not data:
+            return None
+        try:
+            return Credentials(
+                token=data.get("token"),
+                refresh_token=data.get("refresh_token"),
+                token_uri=data.get("token_uri", "https://oauth2.googleapis.com/token"),
+                client_id=data.get("client_id", self.client_id),
+                client_secret=data.get("client_secret", self.client_secret),
+                scopes=data.get("scopes", self.SCOPES),
+            )
+        except Exception:
+            return None
+    
+    def _restore_credentials(self):
+        """Supabase からトークンを復元して session_state にセット"""
+        if st.session_state.get("google_credentials"):
+            return
+        try:
+            token_data = self.db_manager.get_token(self.user_id, self.PROVIDER)
+            if token_data:
+                creds = self._dict_to_credentials(token_data)
+                if creds:
+                    st.session_state["google_credentials"] = creds
+        except Exception:
+            pass
+    
+    def _save_credentials(self, creds: "Credentials"):
+        """Credentials を Supabase と session_state に保存"""
+        st.session_state["google_credentials"] = creds
+        try:
+            self.db_manager.save_token(self.user_id, self.PROVIDER, self._credentials_to_dict(creds))
+        except Exception as e:
+            print(f"Failed to save Google token to Supabase: {e}")
     
     def _get_redirect_uri(self) -> str:
         """現在の環境に合ったリダイレクトURIを返す"""
@@ -64,6 +117,8 @@ class GoogleOAuth:
     
     def is_authenticated(self) -> bool:
         """認証済みか確認"""
+        if not GOOGLE_AUTH_AVAILABLE:
+            return False
         creds = st.session_state.get("google_credentials")
         if creds is None:
             return False
@@ -72,16 +127,15 @@ class GoogleOAuth:
         return False
     
     def get_credentials(self) -> Optional["Credentials"]:
-        """session_state から Credentials を取得"""
+        """session_state から Credentials を取得し、必要なら refresh"""
         if not GOOGLE_AUTH_AVAILABLE:
             return None
         creds = st.session_state.get("google_credentials")
         if isinstance(creds, Credentials):
             if creds.expired and creds.refresh_token:
-                from google.auth.transport.requests import Request
                 try:
                     creds.refresh(Request())
-                    st.session_state["google_credentials"] = creds
+                    self._save_credentials(creds)
                 except Exception:
                     st.session_state.pop("google_credentials", None)
                     return None
@@ -117,7 +171,7 @@ class GoogleOAuth:
                 redirect_uri=redirect_uri,
             )
             flow.fetch_token(code=code)
-            st.session_state["google_credentials"] = flow.credentials
+            self._save_credentials(flow.credentials)
             return True
         except Exception as e:
             st.error(f"Google認証エラー: {e}")
@@ -128,3 +182,7 @@ class GoogleOAuth:
         st.session_state.pop("google_credentials", None)
         st.session_state.pop("google_oauth_state", None)
         st.session_state.pop("google_oauth_redirect_uri", None)
+        try:
+            self.db_manager.delete_token(self.user_id, self.PROVIDER)
+        except Exception:
+            pass

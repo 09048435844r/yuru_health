@@ -22,8 +22,8 @@ def get_database_manager():
 
 
 @st.cache_resource
-def get_withings_oauth():
-    return WithingsOAuth()
+def get_withings_oauth(_db_manager):
+    return WithingsOAuth(_db_manager)
 
 
 @st.cache_resource
@@ -46,7 +46,7 @@ def main():
     st.sidebar.markdown("---")
     st.sidebar.header("🔐 API連携")
     
-    withings_oauth = get_withings_oauth()
+    withings_oauth = get_withings_oauth(db_manager)
     if withings_oauth.is_authenticated():
         st.sidebar.success("✅ Withings: 認証済み")
         if st.sidebar.button("🔓 Withings認証解除"):
@@ -80,7 +80,7 @@ def api_connection_page(db_manager: DatabaseManager):
     with tab1:
         st.subheader("🏋️ Withings OAuth2 認証")
         
-        withings_oauth = get_withings_oauth()
+        withings_oauth = get_withings_oauth(db_manager)
         
         if withings_oauth.is_authenticated():
             st.success("✅ 認証済みです")
@@ -311,7 +311,7 @@ def fetch_data_page(db_manager: DatabaseManager):
         st.write(f"終了: {end_date.strftime('%Y-%m-%d')}")
     
     if data_source == "Withings (体重)":
-        withings_oauth = get_withings_oauth()
+        withings_oauth = get_withings_oauth(db_manager)
         
         if not withings_oauth.is_authenticated():
             st.warning("⚠️ Withingsの認証が必要です。「API連携設定」メニューから認証してください。")

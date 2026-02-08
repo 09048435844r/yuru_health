@@ -10,7 +10,9 @@ class WithingsFetcher(BaseFetcher):
     
     def __init__(self, config: Dict[str, Any], oauth_client: Optional[WithingsOAuth] = None):
         super().__init__(config)
-        self.oauth_client = oauth_client or WithingsOAuth()
+        if oauth_client is None:
+            raise ValueError("oauth_client (WithingsOAuth) is required")
+        self.oauth_client = oauth_client
         self.access_token: Optional[str] = None
     
     def authenticate(self) -> bool:

@@ -115,6 +115,34 @@ class DatabaseManager:
         response = query.execute()
         return response.data
     
+    def save_token(self, user_id: str, provider: str, token_data: Dict[str, Any]):
+        """OAuth トークンを upsert (insert or update) する"""
+        data = {
+            "user_id": user_id,
+            "provider": provider,
+            "token_data": token_data if isinstance(token_data, dict) else json.loads(token_data),
+            "updated_at": "now()",
+        }
+        self.supabase.table("oauth_tokens").upsert(data).execute()
+    
+    def get_token(self, user_id: str, provider: str) -> Optional[Dict[str, Any]]:
+        """OAuth トークンを取得する"""
+        response = (
+            self.supabase.table("oauth_tokens")
+            .select("token_data")
+            .eq("user_id", user_id)
+            .eq("provider", provider)
+            .limit(1)
+            .execute()
+        )
+        if response.data:
+            return response.data[0].get("token_data")
+        return None
+    
+    def delete_token(self, user_id: str, provider: str):
+        """OAuth トークンを削除する"""
+        self.supabase.table("oauth_tokens").delete().eq("user_id", user_id).eq("provider", provider).execute()
+    
     def execute_query(self, query: str, params: Optional[tuple] = None) -> List[Dict[str, Any]]:
         raise NotImplementedError("Direct SQL queries are not supported with Supabase. Use table methods instead.")
     

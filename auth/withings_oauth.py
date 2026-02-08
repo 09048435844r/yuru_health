@@ -1,6 +1,4 @@
-import json
 import requests
-from pathlib import Path
 from typing import Dict, Any, Optional
 from datetime import datetime, timedelta
 from urllib.parse import urlencode
@@ -10,9 +8,11 @@ from src.utils.secrets_loader import load_secrets
 class WithingsOAuth:
     AUTH_URL = "https://account.withings.com/oauth2_user/authorize2"
     TOKEN_URL = "https://wbsapi.withings.net/v2/oauth2"
+    PROVIDER = "withings"
     
-    def __init__(self, secrets_path: str = "config/secrets.yaml", token_path: str = "config/token_withings.json"):
-        self.token_path = Path(token_path)
+    def __init__(self, db_manager, secrets_path: str = "config/secrets.yaml", user_id: str = "user_001"):
+        self.db_manager = db_manager
+        self.user_id = user_id
         self.secrets = load_secrets(secrets_path)
         withings_config = self.secrets.get("withings", {})
         self.client_id = withings_config.get("client_id", "")
@@ -21,15 +21,19 @@ class WithingsOAuth:
         self.tokens = self._load_tokens()
     
     def _load_tokens(self) -> Dict[str, Any]:
-        if self.token_path.exists():
-            with open(self.token_path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        return {}
+        """Supabase からトークンを読み込む"""
+        try:
+            token_data = self.db_manager.get_token(self.user_id, self.PROVIDER)
+            return token_data if token_data else {}
+        except Exception:
+            return {}
     
     def _save_tokens(self, tokens: Dict[str, Any]):
-        self.token_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.token_path, "w", encoding="utf-8") as f:
-            json.dump(tokens, f, indent=2, ensure_ascii=False)
+        """Supabase にトークンを保存する"""
+        try:
+            self.db_manager.save_token(self.user_id, self.PROVIDER, tokens)
+        except Exception as e:
+            print(f"Failed to save token to Supabase: {e}")
         self.tokens = tokens
     
     def get_authorization_url(self, state: str = "random_state") -> str:
@@ -131,6 +135,8 @@ class WithingsOAuth:
         return self.tokens.get("user_id")
     
     def clear_tokens(self):
-        if self.token_path.exists():
-            self.token_path.unlink()
+        try:
+            self.db_manager.delete_token(self.user_id, self.PROVIDER)
+        except Exception:
+            pass
         self.tokens = {}
