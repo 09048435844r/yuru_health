@@ -1,6 +1,9 @@
 import json
+import logging
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
+
+logger = logging.getLogger(__name__)
 
 try:
     from googleapiclient.discovery import build
@@ -189,6 +192,7 @@ class GoogleFitFetcher:
     def _save_to_data_lake(self, user_id: str, raw_response: Dict[str, Any], category: str):
         """APIレスポンス全体を raw_data_lake に保存"""
         if not self.db_manager:
+            logger.warning("GoogleFitFetcher: db_manager is None, skipping save")
             return
         recorded_at = datetime.now().strftime("%Y-%m-%d")
         self.db_manager.save_raw_data(

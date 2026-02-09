@@ -1,8 +1,11 @@
 import json
+import logging
 import requests
 from typing import Dict, Any, Optional, Tuple
 from datetime import datetime
 from src.utils.secrets_loader import load_secrets
+
+logger = logging.getLogger(__name__)
 
 
 class WeatherFetcher:
@@ -70,6 +73,8 @@ class WeatherFetcher:
             data = response.json()
             
             # Data Lake: 生データを解析前に保存
+            if not self.db_manager:
+                logger.warning("WeatherFetcher: db_manager is None, skipping save")
             if self.db_manager:
                 self.db_manager.save_raw_data(
                     user_id="system",

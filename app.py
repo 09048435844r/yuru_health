@@ -1,7 +1,10 @@
+import logging
 import streamlit as st
 import pandas as pd
 import yaml
 from datetime import datetime, timedelta
+
+logger = logging.getLogger(__name__)
 from src.database_manager import DatabaseManager
 from src.withings_fetcher import WithingsFetcher
 from src.fetchers.oura_fetcher import OuraFetcher
@@ -77,6 +80,7 @@ def refresh_data(db_manager: DatabaseManager, user_id: str = "user_001"):
     """データを更新"""
     try:
         with st.spinner("データを更新中..."):
+            logger.info("=== refresh_data started ===")
             end_dt = datetime.now()
             start_dt = end_dt - timedelta(days=7)
             start_str = start_dt.strftime("%Y-%m-%d")
@@ -85,6 +89,7 @@ def refresh_data(db_manager: DatabaseManager, user_id: str = "user_001"):
             # Withingsデータ取得
             withings_oauth = get_withings_oauth(db_manager)
             if withings_oauth.is_authenticated():
+                logger.info("Withings: authenticated, fetching data...")
                 try:
                     with open("config/settings.yaml", "r", encoding="utf-8") as f:
                         config = yaml.safe_load(f)
@@ -100,14 +105,19 @@ def refresh_data(db_manager: DatabaseManager, user_id: str = "user_001"):
                                 raw_data=record.get("raw_data", "")
                             )
                 except Exception as e:
+                    logger.warning(f"Withings fetch error: {e}")
                     st.warning(f"Withings: {str(e)}")
+            else:
+                logger.info("Withings: not authenticated, skipping")
             
             # Ouraデータ取得
             try:
                 with open("config/settings.yaml", "r", encoding="utf-8") as f:
                     config = yaml.safe_load(f)
                 fetcher = OuraFetcher(config, db_manager=db_manager)
+                logger.info(f"Oura: db_manager passed = {db_manager is not None}")
                 if fetcher.authenticate():
+                    logger.info("Oura: authenticated, fetching data...")
                     data = fetcher.fetch_data(user_id, start_str, end_str)
                     
                     if data:
@@ -123,9 +133,11 @@ def refresh_data(db_manager: DatabaseManager, user_id: str = "user_001"):
                                 raw_data=record.get("raw_data", "")
                             )
             except Exception as e:
+                logger.warning(f"Oura fetch error: {e}")
                 st.warning(f"Oura: {str(e)}")
             
             # 天気データ取得
+            logger.info("Weather: starting fetch...")
             try:
                 weather_fetcher = get_weather_fetcher(db_manager=db_manager)
                 if weather_fetcher.is_available():
@@ -151,9 +163,11 @@ def refresh_data(db_manager: DatabaseManager, user_id: str = "user_001"):
             except Exception as e:
                 st.error(f"🌤️ 天気取得エラー: {str(e)}")
         
+        logger.info("=== refresh_data completed ===")
         st.success("✅ データを更新しました")
         st.rerun()
     except Exception as e:
+        logger.error(f"refresh_data top-level error: {e}")
         st.error(f"❌ エラー: {str(e)}")
 
 

@@ -1,8 +1,11 @@
+import logging
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 import requests
 from src.base_fetcher import BaseFetcher
 from auth.withings_oauth import WithingsOAuth
+
+logger = logging.getLogger(__name__)
 
 
 class WithingsFetcher(BaseFetcher):
@@ -48,6 +51,7 @@ class WithingsFetcher(BaseFetcher):
     def _save_to_data_lake(self, user_id: str, raw_response: Dict[str, Any]):
         """APIレスポンスの各測定グループを raw_data_lake に保存"""
         if not self.db_manager:
+            logger.warning("WithingsFetcher: db_manager is None, skipping save")
             return
         if raw_response.get("status") != 0:
             return

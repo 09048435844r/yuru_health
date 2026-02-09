@@ -1,7 +1,10 @@
 import json
+import logging
 from typing import Optional, Dict, Any, List
 from supabase import create_client, Client
 from src.utils.secrets_loader import load_secrets
+
+logger = logging.getLogger(__name__)
 
 
 class DatabaseManager:
@@ -127,8 +130,8 @@ class DatabaseManager:
                 "payload": payload if isinstance(payload, dict) else self._parse_raw_data(payload),
             }
             self.supabase.table("raw_data_lake").insert(data).execute()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"save_raw_data failed: source={source}, category={category}, error={e}")
     
     def save_token(self, user_id: str, provider: str, token_data: Dict[str, Any]):
         """OAuth トークンを upsert (insert or update) する"""
