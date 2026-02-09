@@ -118,6 +118,21 @@ class DatabaseManager:
         response = query.execute()
         return response.data
     
+    def get_raw_data_by_date(self, target_date: str, user_id: str = "user_001") -> Dict[str, List[Dict[str, Any]]]:
+        """指定日の生データを source ごとに整理して返す"""
+        response = (
+            self.supabase.table("raw_data_lake")
+            .select("*")
+            .eq("user_id", user_id)
+            .eq("recorded_at", target_date)
+            .execute()
+        )
+        result: Dict[str, List[Dict[str, Any]]] = {}
+        for row in response.data:
+            source = row.get("source", "unknown")
+            result.setdefault(source, []).append(row)
+        return result
+    
     def save_raw_data(self, user_id: str, recorded_at: str, source: str,
                       category: str, payload: Any):
         """raw_data_lake に生データを保存する"""

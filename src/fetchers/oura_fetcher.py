@@ -56,7 +56,7 @@ class OuraFetcher(BaseFetcher):
     def _save_to_data_lake(self, user_id: str, raw_response: Dict[str, Any], category: str):
         """APIレスポンスの各レコードを raw_data_lake に保存"""
         if not self.db_manager:
-            logger.warning("OuraFetcher: db_manager is None, skipping save")
+            logger.info("OuraFetcher: db_manager is None, skipping save")
             return
         for item in raw_response.get("data", []):
             recorded_at = item.get("day", "")

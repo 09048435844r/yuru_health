@@ -1,5 +1,6 @@
+import json
 import yaml
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from pathlib import Path
 from src.evaluators.base_evaluator import BaseEvaluator
 from src.utils.secrets_loader import load_secrets
@@ -154,3 +155,56 @@ class GeminiEvaluator(BaseEvaluator):
         """平均値を計算"""
         values = [item.get(key, 0) for item in data if item.get(key) is not None]
         return sum(values) / len(values) if values else 0
+    
+    def deep_analyze(self, raw_data_dict: Dict[str, List[Dict[str, Any]]]) -> str:
+        """
+        Data Lake の生データをクロス分析する Deep Insight 機能
+        
+        Args:
+            raw_data_dict: source をキーとした生データ辞書
+                           例: {'oura': [...], 'withings': [...], 'weather': [...]}
+        
+        Returns:
+            str: AI による深層分析テキスト
+        """
+        if not self.is_available():
+            return "⚠️ Gemini APIが利用できません。APIキーを設定してください。"
+        
+        if not raw_data_dict:
+            return "⚠️ 分析対象の生データがありません。まず🔄ボタンでデータを更新してください。"
+        
+        data_sections = []
+        for source, records in raw_data_dict.items():
+            payloads = [r.get("payload", {}) for r in records]
+            data_sections.append(f"### {source.upper()} (件数: {len(records)})\n```json\n{json.dumps(payloads, ensure_ascii=False, indent=1, default=str)}\n```")
+        
+        raw_data_text = "\n\n".join(data_sections)
+        
+        prompt = f"""あなたは47歳男性向けの「ゆるストイック」な健康メンターです。
+厳しすぎず、でもデータに基づいた的確なアドバイスをする専門家として振る舞ってください。
+
+以下は、各ヘルスケアデバイス・APIから取得した **生の JSON データ** です。
+通常の集計値では見えない、生データにしかない詳細情報を深掘りして分析してください。
+
+{raw_data_text}
+
+## 分析指示
+1. **睡眠の質の深掘り** (Oura): sleep の contributors（深い睡眠、REM、入眠時間、中途覚醒など）を詳しく分析
+2. **活動と回復のバランス** (Oura): activity と readiness の関係性、回復が追いついているか
+3. **環境要因との相関** (Weather): 気温・気圧・湿度が睡眠や体調に影響していないか
+4. **体重トレンド** (Withings): 測定値の変動パターン、時間帯による差
+5. **クロス分析**: 上記を横断的に見て、見落としがちなパターンや改善ポイント
+
+## 出力フォーマット
+- 📊 **データハイライト**: 特に注目すべき数値を3つ
+- 🔍 **深層インサイト**: 生データからしか読み取れない発見を2〜3つ
+- 💡 **ゆるストイック・アドバイス**: 具体的で実行しやすい提案を2つ
+- 🎯 **今日のフォーカス**: 今日特に意識すべきこと1つ
+
+日本語で、親しみやすく、でもデータに忠実に回答してください。"""
+        
+        try:
+            response = self.model.generate_content(prompt)
+            return response.text
+        except Exception as e:
+            return f"❌ Deep Insight 分析中にエラーが発生しました: {str(e)}"

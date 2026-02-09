@@ -30,7 +30,7 @@ st.set_page_config(
 
 
 @st.cache_resource
-def get_database_manager(_version: str = "v2_with_raw_data_lake"):
+def get_database_manager(_version: str = "v3_deep_insight"):
     return DatabaseManager("config/secrets.yaml")
 
 
@@ -80,7 +80,7 @@ def refresh_data(db_manager: DatabaseManager, user_id: str = "user_001"):
     """データを更新"""
     try:
         with st.spinner("データを更新中..."):
-            logger.warning("=== refresh_data started ===")
+            logger.info("=== refresh_data started ===")
             end_dt = datetime.now()
             start_dt = end_dt - timedelta(days=7)
             start_str = start_dt.strftime("%Y-%m-%d")
@@ -89,7 +89,7 @@ def refresh_data(db_manager: DatabaseManager, user_id: str = "user_001"):
             # Withingsデータ取得
             withings_oauth = get_withings_oauth(db_manager)
             if withings_oauth.is_authenticated():
-                logger.warning("Withings: authenticated, fetching data...")
+                logger.info("Withings: authenticated, fetching data...")
                 try:
                     with open("config/settings.yaml", "r", encoding="utf-8") as f:
                         config = yaml.safe_load(f)
@@ -105,19 +105,19 @@ def refresh_data(db_manager: DatabaseManager, user_id: str = "user_001"):
                                 raw_data=record.get("raw_data", "")
                             )
                 except Exception as e:
-                    logger.warning(f"Withings fetch error: {e}")
+                    logger.info(f"Withings fetch error: {e}")
                     st.warning(f"Withings: {str(e)}")
             else:
-                logger.warning("Withings: not authenticated, skipping")
+                logger.info("Withings: not authenticated, skipping")
             
             # Ouraデータ取得
             try:
                 with open("config/settings.yaml", "r", encoding="utf-8") as f:
                     config = yaml.safe_load(f)
                 fetcher = OuraFetcher(config, db_manager=db_manager)
-                logger.warning(f"Oura: db_manager passed = {db_manager is not None}")
+                logger.info(f"Oura: db_manager passed = {db_manager is not None}")
                 if fetcher.authenticate():
-                    logger.warning("Oura: authenticated, fetching data...")
+                    logger.info("Oura: authenticated, fetching data...")
                     data = fetcher.fetch_data(user_id, start_str, end_str)
                     
                     if data:
@@ -133,11 +133,11 @@ def refresh_data(db_manager: DatabaseManager, user_id: str = "user_001"):
                                 raw_data=record.get("raw_data", "")
                             )
             except Exception as e:
-                logger.warning(f"Oura fetch error: {e}")
+                logger.info(f"Oura fetch error: {e}")
                 st.warning(f"Oura: {str(e)}")
             
             # 天気データ取得
-            logger.warning("Weather: starting fetch...")
+            logger.info("Weather: starting fetch...")
             try:
                 weather_fetcher = get_weather_fetcher(db_manager=db_manager)
                 if weather_fetcher.is_available():
@@ -163,7 +163,7 @@ def refresh_data(db_manager: DatabaseManager, user_id: str = "user_001"):
             except Exception as e:
                 st.error(f"🌤️ 天気取得エラー: {str(e)}")
         
-        logger.warning("=== refresh_data completed ===")
+        logger.info("=== refresh_data completed ===")
         st.success("✅ データを更新しました")
         st.rerun()
     except Exception as e:
@@ -280,6 +280,18 @@ def main():
             st.info(ai_comment)
         else:
             st.warning("⚠️ AI評価を利用するには、Gemini APIキーの設定とデータが必要です")
+        
+        if evaluator.is_available():
+            if st.button("🔍 AI Deep Insight (生データ分析)"):
+                yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+                with st.spinner("生データを取得中..."):
+                    raw_data = db_manager.get_raw_data_by_date(yesterday)
+                if not raw_data:
+                    st.warning(f"⚠️ {yesterday} の生データがありません。🔄ボタンでデータを更新してください。")
+                else:
+                    with st.spinner("🔍 Deep Insight 分析中...（生JSONをクロス分析しています）"):
+                        insight = evaluator.deep_analyze(raw_data)
+                    st.markdown(insight)
     
     st.markdown("---")
     

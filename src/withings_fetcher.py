@@ -51,7 +51,7 @@ class WithingsFetcher(BaseFetcher):
     def _save_to_data_lake(self, user_id: str, raw_response: Dict[str, Any]):
         """APIレスポンスの各測定グループを raw_data_lake に保存"""
         if not self.db_manager:
-            logger.warning("WithingsFetcher: db_manager is None, skipping save")
+            logger.info("WithingsFetcher: db_manager is None, skipping save")
             return
         if raw_response.get("status") != 0:
             return
