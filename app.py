@@ -30,7 +30,7 @@ st.set_page_config(
 
 
 @st.cache_resource
-def get_database_manager():
+def get_database_manager(_version: str = "v2_with_raw_data_lake"):
     return DatabaseManager("config/secrets.yaml")
 
 
