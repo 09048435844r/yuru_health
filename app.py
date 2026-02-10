@@ -9,6 +9,7 @@ from src.database_manager import DatabaseManager
 from src.withings_fetcher import WithingsFetcher
 from src.fetchers.oura_fetcher import OuraFetcher
 from src.fetchers.weather_fetcher import WeatherFetcher
+from src.fetchers.switchbot_fetcher import SwitchBotFetcher
 from auth.withings_oauth import WithingsOAuth
 from src.evaluators.gemini_evaluator import GeminiEvaluator
 from auth.google_oauth import GoogleOAuth
@@ -167,6 +168,21 @@ def refresh_data(db_manager: DatabaseManager, user_id: str = "user_001"):
                         st.error(f"🌤️ 天気取得エラー: {weather_fetcher.last_error}")
             except Exception as e:
                 st.error(f"🌤️ 天気取得エラー: {str(e)}")
+            
+            # SwitchBot 環境データ取得
+            logger.info("SwitchBot: starting fetch...")
+            try:
+                switchbot_fetcher = SwitchBotFetcher(db_manager=db_manager)
+                if switchbot_fetcher.is_available():
+                    result = switchbot_fetcher.fetch_device_status()
+                    if result:
+                        logger.info("SwitchBot: environment data fetched successfully")
+                    else:
+                        logger.info("SwitchBot: no data returned")
+                else:
+                    logger.info("SwitchBot: not configured, skipping")
+            except Exception as e:
+                logger.info(f"SwitchBot fetch error: {e}")
         
         logger.info("=== refresh_data completed ===")
         st.success("✅ データを更新しました")
@@ -262,6 +278,7 @@ def main():
         "withings": "Withings",
         "google_fit": "Google Fit",
         "weather": "Weather",
+        "switchbot": "SwitchBot",
     }
     
     today = datetime.now().date()
