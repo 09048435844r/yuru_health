@@ -30,7 +30,7 @@ st.set_page_config(
 
 
 @st.cache_resource
-def get_database_manager(_version: str = "v4_data_footprints"):
+def get_database_manager(_version: str = "v5_footprints_fix"):
     return DatabaseManager("config/secrets.yaml")
 
 
