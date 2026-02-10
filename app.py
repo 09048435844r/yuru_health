@@ -32,7 +32,7 @@ st.set_page_config(
 
 def get_database_manager():
     obj = st.session_state.get("_db_manager")
-    if obj is None or not hasattr(obj, "get_data_arrival_history"):
+    if obj is None or not hasattr(obj, "_payload_key_count"):
         st.session_state["_db_manager"] = DatabaseManager("config/secrets.yaml")
     return st.session_state["_db_manager"]
 
@@ -168,6 +168,35 @@ def refresh_data(db_manager: DatabaseManager, user_id: str = "user_001"):
                         st.error(f"🌤️ 天気取得エラー: {weather_fetcher.last_error}")
             except Exception as e:
                 st.error(f"🌤️ 天気取得エラー: {str(e)}")
+            
+            # Google Fit データ取得 (7日バックフィル)
+            try:
+                google_oauth = get_google_oauth(db_manager)
+                if google_oauth.is_available() and hasattr(google_oauth, "ensure_credentials"):
+                    google_oauth.ensure_credentials()
+                if google_oauth.is_available() and google_oauth.is_authenticated():
+                    creds = google_oauth.get_credentials()
+                    if creds:
+                        logger.info("Google Fit: authenticated, fetching 7-day data...")
+                        gfit_fetcher = GoogleFitFetcher(creds, db_manager=db_manager)
+                        fit_data = gfit_fetcher.fetch_all(user_id, start_str, end_str)
+                        saved_count = 0
+                        for data_type, records in fit_data.items():
+                            for record in records:
+                                try:
+                                    db_manager.insert_google_fit_data(
+                                        user_id=record["user_id"],
+                                        date=record["date"],
+                                        data_type=record["data_type"],
+                                        value=record["value"],
+                                        raw_data=record["raw_data"],
+                                    )
+                                    saved_count += 1
+                                except Exception:
+                                    pass
+                        logger.info(f"Google Fit: {saved_count} records saved")
+            except Exception as e:
+                logger.info(f"Google Fit fetch error: {e}")
             
             # SwitchBot 環境データ取得
             logger.info("SwitchBot: starting fetch...")

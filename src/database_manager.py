@@ -145,18 +145,53 @@ class DatabaseManager:
             result.setdefault(source, []).append(row)
         return result
     
+    def _payload_key_count(self, payload: Any) -> int:
+        """payload の情報密度（キー数）を再帰的にカウント"""
+        if isinstance(payload, dict):
+            count = len(payload)
+            for v in payload.values():
+                count += self._payload_key_count(v)
+            return count
+        if isinstance(payload, list):
+            return sum(self._payload_key_count(item) for item in payload)
+        return 0
+    
     def save_raw_data(self, user_id: str, recorded_at: str, source: str,
                       category: str, payload: Any):
-        """raw_data_lake に生データを保存する"""
+        """raw_data_lake にデータ密度優先で UPSERT する"""
         try:
-            data = {
-                "user_id": user_id,
-                "recorded_at": recorded_at,
-                "source": source,
-                "category": category,
-                "payload": payload if isinstance(payload, dict) else self._parse_raw_data(payload),
-            }
-            self.supabase.table("raw_data_lake").insert(data).execute()
+            new_payload = payload if isinstance(payload, dict) else self._parse_raw_data(payload)
+            
+            # 既存レコードを検索
+            existing = (
+                self.supabase.table("raw_data_lake")
+                .select("id, payload")
+                .eq("user_id", user_id)
+                .eq("recorded_at", recorded_at)
+                .eq("source", source)
+                .eq("category", category)
+                .execute()
+            )
+            
+            if existing.data:
+                old_payload = existing.data[0].get("payload", {})
+                old_density = self._payload_key_count(old_payload)
+                new_density = self._payload_key_count(new_payload)
+                if new_density > old_density:
+                    row_id = existing.data[0]["id"]
+                    self.supabase.table("raw_data_lake").update(
+                        {"payload": new_payload}
+                    ).eq("id", row_id).execute()
+                    logger.info(f"save_raw_data UPDATED: {source}/{category} density {old_density}->{new_density}")
+            else:
+                data = {
+                    "user_id": user_id,
+                    "recorded_at": recorded_at,
+                    "source": source,
+                    "category": category,
+                    "payload": new_payload,
+                }
+                self.supabase.table("raw_data_lake").insert(data).execute()
         except Exception as e:
             logger.warning(f"save_raw_data failed: source={source}, category={category}, error={e}")
     
