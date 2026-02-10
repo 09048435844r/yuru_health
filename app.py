@@ -56,7 +56,7 @@ def get_weather_fetcher(db_manager=None):
 
 
 @st.cache_resource
-def get_google_oauth(_db_manager):
+def get_google_oauth(_db_manager, _version: str = "v2_ensure_credentials"):
     return GoogleOAuth(_db_manager)
 
 
