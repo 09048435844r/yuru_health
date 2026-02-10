@@ -30,7 +30,8 @@ st.set_page_config(
 
 
 def get_database_manager():
-    if "_db_manager" not in st.session_state:
+    obj = st.session_state.get("_db_manager")
+    if obj is None or not hasattr(obj, "get_data_arrival_history"):
         st.session_state["_db_manager"] = DatabaseManager("config/secrets.yaml")
     return st.session_state["_db_manager"]
 
@@ -58,7 +59,8 @@ def get_weather_fetcher(db_manager=None):
 
 
 def get_google_oauth(db_manager):
-    if "_google_oauth" not in st.session_state:
+    obj = st.session_state.get("_google_oauth")
+    if obj is None or not hasattr(obj, "ensure_credentials"):
         st.session_state["_google_oauth"] = GoogleOAuth(db_manager)
     return st.session_state["_google_oauth"]
 
