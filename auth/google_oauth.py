@@ -1,6 +1,9 @@
+import logging
 import streamlit as st
 from typing import Dict, Any, Optional
 from src.utils.secrets_loader import load_secrets
+
+logger = logging.getLogger(__name__)
 
 try:
     from google_auth_oauthlib.flow import Flow
@@ -66,8 +69,49 @@ class GoogleOAuth:
                 creds = self._dict_to_credentials(token_data)
                 if creds:
                     st.session_state["google_credentials"] = creds
+                    logger.info("Google credentials restored from Supabase")
         except Exception:
             pass
+    
+    def ensure_credentials(self):
+        """毎回のページロードで呼び出し、session_state にトークンがなければ DB から復元し、期限切れならリフレッシュする"""
+        if not GOOGLE_AUTH_AVAILABLE:
+            return
+        
+        creds = st.session_state.get("google_credentials")
+        
+        # session_state にない → DB から復元
+        if creds is None:
+            try:
+                token_data = self.db_manager.get_token(self.user_id, self.PROVIDER)
+                if token_data:
+                    creds = self._dict_to_credentials(token_data)
+                    if creds:
+                        st.session_state["google_credentials"] = creds
+                        logger.info("Google credentials hydrated from Supabase")
+            except Exception as e:
+                logger.info(f"Google token hydration failed: {e}")
+                return
+        
+        if creds is None:
+            return
+        
+        # 期限切れ → リフレッシュ
+        if not isinstance(creds, Credentials):
+            return
+        
+        if creds.valid:
+            return
+        
+        if creds.expired and creds.refresh_token:
+            try:
+                creds.refresh(Request())
+                self._save_credentials(creds)
+                logger.info("Google credentials refreshed and saved")
+            except Exception as e:
+                logger.info(f"Google token refresh failed: {e}")
+                st.session_state.pop("google_credentials", None)
+                return
     
     def _save_credentials(self, creds: "Credentials"):
         """Credentials を Supabase と session_state に保存"""
@@ -116,14 +160,17 @@ class GoogleOAuth:
         )
     
     def is_authenticated(self) -> bool:
-        """認証済みか確認"""
+        """認証済みか確認（有効またはリフレッシュ可能なトークンがある場合 True）"""
         if not GOOGLE_AUTH_AVAILABLE:
             return False
         creds = st.session_state.get("google_credentials")
         if creds is None:
             return False
         if isinstance(creds, Credentials):
-            return creds.valid or creds.expired
+            if creds.valid:
+                return True
+            if creds.expired and creds.refresh_token:
+                return True
         return False
     
     def get_credentials(self) -> Optional["Credentials"]:

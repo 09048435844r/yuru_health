@@ -418,6 +418,8 @@ def main():
     # Google Fit データ表示
     google_oauth = get_google_oauth(db_manager)
     if google_oauth.is_available():
+        google_oauth.ensure_credentials()
+        
         # OAuth コールバック処理
         query_params = st.query_params
         auth_code = query_params.get("code")
