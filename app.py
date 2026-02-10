@@ -29,14 +29,16 @@ st.set_page_config(
 )
 
 
-@st.cache_resource
-def get_database_manager(_version: str = "v5_footprints_fix"):
-    return DatabaseManager("config/secrets.yaml")
+def get_database_manager():
+    if "_db_manager" not in st.session_state:
+        st.session_state["_db_manager"] = DatabaseManager("config/secrets.yaml")
+    return st.session_state["_db_manager"]
 
 
-@st.cache_resource
-def get_withings_oauth(_db_manager):
-    return WithingsOAuth(_db_manager)
+def get_withings_oauth(db_manager):
+    if "_withings_oauth" not in st.session_state:
+        st.session_state["_withings_oauth"] = WithingsOAuth(db_manager)
+    return st.session_state["_withings_oauth"]
 
 
 @st.cache_resource
@@ -55,9 +57,10 @@ def get_weather_fetcher(db_manager=None):
     return WeatherFetcher(db_manager=db_manager)
 
 
-@st.cache_resource
-def get_google_oauth(_db_manager, _version: str = "v2_ensure_credentials"):
-    return GoogleOAuth(_db_manager)
+def get_google_oauth(db_manager):
+    if "_google_oauth" not in st.session_state:
+        st.session_state["_google_oauth"] = GoogleOAuth(db_manager)
+    return st.session_state["_google_oauth"]
 
 
 def fetch_latest_data(db_manager: DatabaseManager, user_id: str = "user_001"):
