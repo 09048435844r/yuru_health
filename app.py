@@ -30,7 +30,7 @@ st.set_page_config(
 
 
 @st.cache_resource
-def get_database_manager(_version: str = "v3_deep_insight"):
+def get_database_manager(_version: str = "v4_data_footprints"):
     return DatabaseManager("config/secrets.yaml")
 
 
@@ -171,39 +171,6 @@ def refresh_data(db_manager: DatabaseManager, user_id: str = "user_001"):
         st.error(f"❌ エラー: {str(e)}")
 
 
-def generate_consultation_prompt(data: dict) -> str:
-    """Gemini相談用プロンプトを生成"""
-    latest_weight = data.get("latest_weight")
-    latest_oura = data.get("latest_oura")
-    weight_data = data.get("weight_data", [])
-    
-    prompt_parts = ["# 健康データサマリー\n"]
-    
-    # 体重データ
-    if latest_weight:
-        prompt_parts.append(f"## 体重")
-        prompt_parts.append(f"- 最新: {latest_weight.get('weight_kg', 'N/A')}kg ({latest_weight.get('measured_at', 'N/A')})")
-        if len(weight_data) >= 7:
-            avg_7d = sum(w.get('weight_kg', 0) for w in weight_data[:7]) / 7
-            prompt_parts.append(f"- 7日平均: {avg_7d:.1f}kg")
-        prompt_parts.append("")
-    
-    # Ouraデータ
-    if latest_oura:
-        prompt_parts.append(f"## Oura Ring")
-        prompt_parts.append(f"- 睡眠スコア: {latest_oura.get('sleep_score', 'N/A')}点")
-        prompt_parts.append(f"- 活動スコア: {latest_oura.get('activity_score', 'N/A')}点")
-        prompt_parts.append(f"- コンディション: {latest_oura.get('readiness_score', 'N/A')}点")
-        prompt_parts.append(f"- 歩数: {latest_oura.get('steps', 'N/A')}歩")
-        prompt_parts.append(f"- 測定日: {latest_oura.get('measured_at', 'N/A')}")
-        prompt_parts.append("")
-    
-    prompt_parts.append("## 相談内容")
-    prompt_parts.append("（ここに相談したい内容を記入してください）")
-    
-    return "\n".join(prompt_parts)
-
-
 def main():
     st.title("💚 YuruHealth")
     
@@ -237,134 +204,140 @@ def main():
         except Exception:
             pass
     
-    # 環境情報表示（さりげなく）
-    env_log = db_manager.get_latest_environmental_log()
-    weather_info = st.session_state.get("latest_weather") or env_log
-    if weather_info:
-        city = weather_info.get("city_name", "")
-        summary = weather_info.get("weather_summary", "")
-        temp = weather_info.get("temp")
-        temp_str = f" {temp}℃" if temp is not None else ""
-        st.caption(f"📍 {city}: {summary}{temp_str}")
-    else:
-        st.warning("天気データが取得できませんでした。🔄 ボタンでデータを更新してください。")
-    
-    # データ更新ボタン
-    col1, col2 = st.columns([3, 1])
-    with col2:
-        if st.button("🔄 更新", use_container_width=True):
-            refresh_data(db_manager)
-    
-    st.markdown("---")
-    
     # 最新データ取得
     data = fetch_latest_data(db_manager)
     latest_weight = data["latest_weight"]
     latest_oura = data["latest_oura"]
     
-    # AI評価表示（最上部）
-    with st.container():
-        st.subheader("🤖 AI評価")
-        
-        model_name = gemini_settings.get("model_name", "gemini-1.5-flash")
-        evaluator = get_gemini_evaluator(model_name)
-        
-        if evaluator.is_available() and (latest_weight or latest_oura):
-            with st.spinner("AIが分析中..."):
-                evaluation_data = {
-                    "weight_data": data["weight_data"][:7],
-                    "oura_data": data["oura_data"][:7]
-                }
-                ai_comment = evaluator.evaluate(evaluation_data, mode="witty")
-            
-            st.info(ai_comment)
-        else:
-            st.warning("⚠️ AI評価を利用するには、Gemini APIキーの設定とデータが必要です")
-        
-        if evaluator.is_available():
-            if st.button("🔍 AI Deep Insight (生データ分析)"):
-                yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
-                with st.spinner("生データを取得中..."):
-                    raw_data = db_manager.get_raw_data_by_date(yesterday)
-                if not raw_data:
-                    st.warning(f"⚠️ {yesterday} の生データがありません。🔄ボタンでデータを更新してください。")
-                else:
-                    with st.spinner("🔍 Deep Insight 分析中...（生JSONをクロス分析しています）"):
-                        insight = evaluator.deep_analyze(raw_data)
-                    st.markdown(insight)
+    # 環境情報表示（さりげなく）
+    env_log = db_manager.get_latest_environmental_log()
+    weather_info = st.session_state.get("latest_weather") or env_log
     
-    st.markdown("---")
-    
-    # メトリクス表示（大きく）
-    st.subheader("📊 今日の記録")
-    
+    # ── 最上部: メトリクス (天気・レディネス・体重) ──
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        if latest_oura and latest_oura.get('sleep_score'):
-            st.metric(
-                label="😴 睡眠",
-                value=f"{latest_oura.get('sleep_score')}点",
-                delta=None
-            )
+        if weather_info and weather_info.get("temp") is not None:
+            summary = weather_info.get("weather_summary", "")
+            st.metric(label=f"🌤 {summary}", value=f"{weather_info['temp']}℃")
         else:
-            st.metric(label="😴 睡眠", value="--")
+            st.metric(label="🌤 天気", value="--")
     
     with col2:
-        if latest_oura and latest_oura.get('steps'):
-            steps = latest_oura.get('steps')
+        if latest_oura and latest_oura.get('readiness_score'):
             st.metric(
-                label="🚶 歩数",
-                value=f"{steps:,}歩",
-                delta=None
+                label="💪 レディネス",
+                value=f"{latest_oura.get('readiness_score')}点"
             )
         else:
-            st.metric(label="🚶 歩数", value="--")
+            st.metric(label="� レディネス", value="--")
     
     with col3:
         if latest_weight and latest_weight.get('weight_kg'):
             weight = latest_weight.get('weight_kg')
-            st.metric(
-                label="⚖️ 体重",
-                value=f"{weight}kg",
-                delta=None
-            )
+            st.metric(label="⚖️ 体重", value=f"{weight}kg")
         else:
             st.metric(label="⚖️ 体重", value="--")
     
-    # 追加メトリクス
-    col4, col5 = st.columns(2)
-    
-    with col4:
-        if latest_oura and latest_oura.get('activity_score'):
-            st.metric(
-                label="🏃 活動",
-                value=f"{latest_oura.get('activity_score')}点"
-            )
-        else:
-            st.metric(label="🏃 活動", value="--")
-    
-    with col5:
-        if latest_oura and latest_oura.get('readiness_score'):
-            st.metric(
-                label="💪 コンディション",
-                value=f"{latest_oura.get('readiness_score')}点"
-            )
-        else:
-            st.metric(label="💪 コンディション", value="--")
+    # データ更新ボタン
+    col_spacer, col_btn = st.columns([3, 1])
+    with col_btn:
+        if st.button("🔄 更新", use_container_width=True):
+            refresh_data(db_manager)
     
     st.markdown("---")
     
-    # Gemini相談セクション
-    with st.expander("💬 Geminiに相談する", expanded=False):
-        st.markdown("最新データを要約したテキストです。コピーしてGeminiに貼り付けてください。")
-        
-        consultation_prompt = generate_consultation_prompt(data)
-        st.code(consultation_prompt, language="text")
-        
-        st.caption("💡 [Gemini](https://gemini.google.com/)で相談する")
+    # ── 記録の足跡 (Data Footprints) ──
+    st.subheader("👣 記録の足跡")
     
-    # 詳細データ（エキスパンダー）
+    arrival_history = db_manager.get_data_arrival_history(days=14)
+    
+    source_labels = {
+        "oura": "Oura Ring",
+        "withings": "Withings",
+        "google_fit": "Google Fit",
+        "weather": "Weather",
+    }
+    
+    today = datetime.now().date()
+    date_range = [(today - timedelta(days=i)) for i in range(13, -1, -1)]
+    
+    arrival_set = set()
+    for row in arrival_history:
+        arrival_set.add((row["source"], row["recorded_at"]))
+    
+    total_dots = 0
+    green_dots = 0
+    
+    for source_key, source_label in source_labels.items():
+        cols = st.columns([2] + [1] * 14)
+        cols[0].caption(source_label)
+        for i, d in enumerate(date_range):
+            date_str = d.strftime("%Y-%m-%d")
+            total_dots += 1
+            if (source_key, date_str) in arrival_set:
+                cols[i + 1].markdown("🟢")
+                green_dots += 1
+            else:
+                cols[i + 1].markdown("⚪")
+    
+    date_header_cols = st.columns([2] + [1] * 14)
+    date_header_cols[0].caption("")
+    for i, d in enumerate(date_range):
+        date_header_cols[i + 1].caption(d.strftime("%d"))
+    
+    if green_dots > 0:
+        rate = green_dots / total_dots * 100
+        st.success(f"🎉 過去14日間で **{green_dots}件** のデータが届いています（到達率 {rate:.0f}%）。記録を続けていること自体が素晴らしい！")
+    else:
+        st.info("まだデータがありません。� ボタンでデータを取得してみましょう。")
+    
+    st.markdown("---")
+    
+    # ── サブメトリクス ──
+    col4, col5, col6 = st.columns(3)
+    
+    with col4:
+        if latest_oura and latest_oura.get('sleep_score'):
+            st.metric(label="😴 睡眠", value=f"{latest_oura.get('sleep_score')}点")
+        else:
+            st.metric(label="😴 睡眠", value="--")
+    
+    with col5:
+        if latest_oura and latest_oura.get('activity_score'):
+            st.metric(label="🏃 活動", value=f"{latest_oura.get('activity_score')}点")
+        else:
+            st.metric(label="🏃 活動", value="--")
+    
+    with col6:
+        if latest_oura and latest_oura.get('steps'):
+            st.metric(label="🚶 歩数", value=f"{latest_oura.get('steps'):,}歩")
+        else:
+            st.metric(label="🚶 歩数", value="--")
+    
+    st.markdown("---")
+    
+    # ── AI Deep Insight (生データ分析) ──
+    model_name = gemini_settings.get("model_name", "gemini-1.5-flash")
+    evaluator = get_gemini_evaluator(model_name)
+    
+    if evaluator.is_available():
+        if st.button("🔍 AI Deep Insight (生データ分析)", use_container_width=True):
+            yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+            with st.spinner("生データを取得中..."):
+                raw_data = db_manager.get_raw_data_by_date(yesterday)
+            if not raw_data:
+                st.warning(f"⚠️ {yesterday} の生データがありません。🔄ボタンでデータを更新してください。")
+            else:
+                with st.spinner("🔍 Deep Insight 分析中..."):
+                    insight = evaluator.deep_analyze(raw_data)
+                st.success(insight.split("\n")[0] if insight else "分析結果なし")
+                with st.expander("� 詳細分析を見る", expanded=False):
+                    st.markdown(insight)
+    
+    st.markdown("---")
+    
+    # ── 詳細データ（エキスパンダー） ──
     with st.expander("📈 詳細データ", expanded=False):
         tab1, tab2 = st.tabs(["体重", "Oura"])
         
@@ -399,7 +372,6 @@ def main():
                 df['measured_at'] = pd.to_datetime(df['measured_at'])
                 df = df.sort_values('measured_at', ascending=False)
                 
-                # スコアチャート
                 score_cols = ['sleep_score', 'activity_score', 'readiness_score']
                 if all(col in df.columns for col in score_cols):
                     st.line_chart(

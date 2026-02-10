@@ -118,6 +118,18 @@ class DatabaseManager:
         response = query.execute()
         return response.data
     
+    def get_data_arrival_history(self, days: int = 14) -> List[Dict[str, Any]]:
+        """過去N日間の (source, recorded_at) リストを raw_data_lake から取得"""
+        from datetime import datetime, timedelta
+        start_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+        response = (
+            self.supabase.table("raw_data_lake")
+            .select("source, recorded_at")
+            .gte("recorded_at", start_date)
+            .execute()
+        )
+        return response.data
+    
     def get_raw_data_by_date(self, target_date: str, user_id: str = "user_001") -> Dict[str, List[Dict[str, Any]]]:
         """指定日の生データを source ごとに整理して返す"""
         response = (
