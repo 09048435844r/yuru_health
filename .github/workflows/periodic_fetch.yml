@@ -2,8 +2,8 @@ name: Periodic Data Fetch
 
 on:
   schedule:
-    # 15 分おきに実行 (UTC)
-    - cron: "*/15 * * * *"
+    # 5 分おきに実行 (UTC)
+    - cron: "*/5 * * * *"
   workflow_dispatch: # 手動実行も可能
 
 jobs:
