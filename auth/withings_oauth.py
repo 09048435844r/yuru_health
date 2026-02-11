@@ -1,8 +1,10 @@
 import requests
 from typing import Dict, Any, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 from src.utils.secrets_loader import load_secrets
+
+JST = timezone(timedelta(hours=9))
 
 
 class WithingsOAuth:
@@ -70,8 +72,8 @@ class WithingsOAuth:
                 "token_type": body.get("token_type"),
                 "scope": body.get("scope"),
                 "user_id": body.get("userid"),
-                "created_at": datetime.now().isoformat(),
-                "expires_at": (datetime.now() + timedelta(seconds=body.get("expires_in", 10800))).isoformat()
+                "created_at": datetime.now(JST).isoformat(),
+                "expires_at": (datetime.now(JST) + timedelta(seconds=body.get("expires_in", 10800))).isoformat()
             }
             self._save_tokens(tokens)
             return tokens
@@ -104,8 +106,8 @@ class WithingsOAuth:
                 "token_type": body.get("token_type"),
                 "scope": body.get("scope"),
                 "user_id": body.get("userid"),
-                "created_at": datetime.now().isoformat(),
-                "expires_at": (datetime.now() + timedelta(seconds=body.get("expires_in", 10800))).isoformat()
+                "created_at": datetime.now(JST).isoformat(),
+                "expires_at": (datetime.now(JST) + timedelta(seconds=body.get("expires_in", 10800))).isoformat()
             }
             self._save_tokens(tokens)
             return tokens
@@ -119,7 +121,7 @@ class WithingsOAuth:
         expires_at = self.tokens.get("expires_at")
         if expires_at:
             expires_datetime = datetime.fromisoformat(expires_at)
-            if datetime.now() >= expires_datetime - timedelta(minutes=5):
+            if datetime.now(JST) >= expires_datetime - timedelta(minutes=5):
                 try:
                     self.refresh_access_token()
                 except Exception:

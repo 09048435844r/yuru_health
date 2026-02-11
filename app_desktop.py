@@ -3,7 +3,7 @@ import pandas as pd
 import yaml
 from datetime import datetime, timedelta
 from src.database_manager import DatabaseManager
-from src.withings_fetcher import WithingsFetcher
+from src.fetchers.withings_fetcher import WithingsFetcher
 from src.fetchers.oura_fetcher import OuraFetcher
 from auth.withings_oauth import WithingsOAuth
 

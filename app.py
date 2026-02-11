@@ -8,7 +8,7 @@ JST = timezone(timedelta(hours=9))
 
 logger = logging.getLogger(__name__)
 from src.database_manager import DatabaseManager
-from src.withings_fetcher import WithingsFetcher
+from src.fetchers.withings_fetcher import WithingsFetcher
 from src.fetchers.oura_fetcher import OuraFetcher
 from src.fetchers.weather_fetcher import WeatherFetcher
 from src.fetchers.switchbot_fetcher import SwitchBotFetcher

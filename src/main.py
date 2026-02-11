@@ -73,7 +73,7 @@ def run_all_fetchers():
     # ── Withings ──
     def fetch_withings():
         from auth.withings_oauth import WithingsOAuth
-        from src.withings_fetcher import WithingsFetcher
+        from src.fetchers.withings_fetcher import WithingsFetcher
         withings_oauth = WithingsOAuth(db_manager)
         if not withings_oauth.is_authenticated():
             return "skip"
