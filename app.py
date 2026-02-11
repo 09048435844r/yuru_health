@@ -15,7 +15,7 @@ from src.fetchers.switchbot_fetcher import SwitchBotFetcher
 from auth.withings_oauth import WithingsOAuth
 from src.evaluators.gemini_evaluator import GeminiEvaluator
 from auth.google_oauth import GoogleOAuth
-from src.fetchers.google_fit_fetcher import GoogleFitFetcher, GOOGLE_FIT_AVAILABLE
+from src.fetchers.google_fit_fetcher import GoogleFitFetcher
 from src.utils.sparkline import build_footprint_html
 
 try:

@@ -2,10 +2,10 @@ import logging
 import requests
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta, timezone
-
-_JST = timezone(timedelta(hours=9))
 from src.base_fetcher import BaseFetcher
 from src.utils.secrets_loader import load_secrets
+
+_JST = timezone(timedelta(hours=9))
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +84,7 @@ class OuraFetcher(BaseFetcher):
             response = requests.get(url, params=params, headers=headers)
             response.raise_for_status()
             return response.json()
-        except Exception as e:
+        except Exception:
             return {"data": []}
     
     def _fetch_daily_sleep(self, start_date: str, end_date: str) -> Dict[str, Any]:
@@ -103,7 +103,7 @@ class OuraFetcher(BaseFetcher):
             response = requests.get(url, params=params, headers=headers)
             response.raise_for_status()
             return response.json()
-        except Exception as e:
+        except Exception:
             return {"data": []}
     
     def _fetch_daily_readiness(self, start_date: str, end_date: str) -> Dict[str, Any]:
@@ -122,7 +122,7 @@ class OuraFetcher(BaseFetcher):
             response = requests.get(url, params=params, headers=headers)
             response.raise_for_status()
             return response.json()
-        except Exception as e:
+        except Exception:
             return {"data": []}
     
     def _parse_oura_data(self, activity: Dict[str, Any], sleep: Dict[str, Any], 

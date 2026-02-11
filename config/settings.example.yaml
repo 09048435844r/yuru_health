@@ -1,10 +1,19 @@
+# YuruHealth 設定ファイル
+# このファイルをコピーして settings.yaml を作成してください
+# 環境変数が設定されている場合はそちらが優先されます
+
 env: "local"
 
+# Gemini AI モデル設定
+# 環境変数: GEMINI_MODEL_NAME
+gemini:
+  model_name: "gemini-1.5-flash"
+
+# データベース設定 (現在は Supabase のみ使用)
 database:
   local:
     type: "sqlite"
     path: "data/health_data.db"
-  
   production:
     type: "mysql"
     host: "localhost"
@@ -13,7 +22,18 @@ database:
     user: "your_mysql_user"
     password: "your_mysql_password"
 
+# Withings 設定 (OAuth 認証情報は secrets.yaml または環境変数で管理)
 withings:
   client_id: "your_client_id"
   client_secret: "your_client_secret"
   redirect_uri: "http://localhost:8501/callback"
+
+# ── ハッシュガード設定 (参考情報) ──
+# DatabaseManager._VOLATILE_KEYS で定義されている除外キー:
+#   dt, t, time, timestamp, ts, server_time,
+#   fetched_at, recorded_at, updated_at, created_at, cod
+#
+# これらのキーは payload の SHA-256 ハッシュ計算時に除外され、
+# API レスポンスに含まれる変動するタイムスタンプによる
+# 誤った重複検知を防止します。
+# カスタマイズが必要な場合は src/database_manager.py を編集してください。

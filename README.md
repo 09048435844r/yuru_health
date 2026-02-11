@@ -9,29 +9,46 @@
 
 ---
 
-## ✨ 主な機能
+## ✨ Current Features
+
+### データ収集
+
+| ソース | 取得データ | 認証方式 |
+|--------|-----------|---------|
+| **Oura Ring** | 睡眠・活動・コンディションスコア (7 日分バックフィル) | Personal Token |
+| **Withings** | 体重 | OAuth 2.0 |
+| **Google Fit** | 歩数・睡眠・体重 (Samsung Health → Health Connect 経由) | OAuth 2.0 |
+| **SwitchBot** | 寝室の CO2・気温・湿度 | API Token + HMAC |
+| **OpenWeatherMap** | 天気・気温・湿度・気圧 | API Key |
+
+### Phase 1 完了機能
 
 | 機能 | 説明 |
 |------|------|
-| **Oura Ring** | 睡眠・活動・コンディションスコアを 7 日分バックフィル |
-| **Withings** | OAuth2 で体重データを自動取得 |
-| **Google Fit** | Samsung Health → Health Connect 経由で歩数・睡眠・体重 |
-| **SwitchBot** | 寝室の CO2・気温・湿度を取得 |
-| **OpenWeatherMap** | 気象データ（気温・湿度・気圧）を記録 |
-| **Gemini AI** | 生データを横断分析する Deep Insight 機能 |
+| **高密度データ取得** | GitHub Actions による 15 分間隔の自動フェッチ (cron: `3,18,33,48 * * * *`) |
+| **インテリジェント・ハッシュガード** | `_strip_volatile()` でタイムスタンプ系メタデータ (`dt`, `timestamp`, `cod` 等) を除外した SHA-256 比較による重複排除 |
+| **JST タイムゾーン同期** | 全コンポーネント (`database_manager`, `fetchers`, `app.py`, `main.py`) における `datetime.now(JST)` への完全統一 |
+| **recorded_at 自動補完** | payload 内の `dt` / `timestamp` / `date` から `recorded_at` を導出。見つからなければ JST 現在時刻をフォールバック |
+| **モバイル最適化 UI** | Galaxy Z Fold7 等に対応した Sticky カラム付き横スクロール HTML テーブル |
+| **Sparklines** | SwitchBot / Weather の 24h 気温推移を SVG ミニ折れ線グラフで表示 |
+| **サマリーバッジ** | Oura (睡眠/活動/準備スコア)、Withings (体重)、Google Fit (歩数/睡眠) をカラーバッジで表示 |
+| **Gemini AI Deep Insight** | 生データを横断分析する AI 機能 |
+| **Raw Data View** | サイドバーのチェックボックスで `raw_data_lake` 最新 100 件を表示 |
 | **Data Lake** | 全ソースの生 JSON を `raw_data_lake` に一元保存 |
-| **GitHub Actions** | 5 分おきに自動取得 (cron) |
-| **Streamlit UI** | モバイル最適化ダッシュボード + 記録の足跡グリッド |
 
 ## 📁 プロジェクト構成
 
 ```
 yuru_health/
-├── app.py                          # Streamlit メイン UI
+├── app.py                          # Streamlit メイン UI (モバイル最適化)
 ├── src/
 │   ├── main.py                     # CLI エントリーポイント (GitHub Actions 用)
-│   ├── database_manager.py         # Supabase クライアント (hash-guard UPSERT)
-│   ├── base_fetcher.py             # Fetcher 基底クラス
+│   ├── database_manager.py         # Supabase クライアント
+│   │                               #   - hash-guard (SHA-256 重複排除)
+│   │                               #   - _strip_volatile() (メタデータ除外)
+│   │                               #   - _extract_recorded_at() (タイムスタンプ導出)
+│   │                               #   - get_data_arrival_rich() (Sparkline/Badge データ)
+│   ├── base_fetcher.py             # Fetcher 抽象基底クラス
 │   ├── withings_fetcher.py         # Withings API
 │   ├── fetchers/
 │   │   ├── oura_fetcher.py         # Oura Ring API
@@ -42,7 +59,8 @@ yuru_health/
 │   │   ├── base_evaluator.py       # AI 評価基底クラス
 │   │   └── gemini_evaluator.py     # Gemini AI 評価
 │   └── utils/
-│       └── secrets_loader.py       # シークレット読み込み (env → YAML → st.secrets)
+│       ├── secrets_loader.py       # シークレット読み込み (env → YAML → st.secrets)
+│       └── sparkline.py            # SVG Sparkline + Badge + HTML テーブル生成
 ├── auth/
 │   ├── withings_oauth.py           # Withings OAuth2 (Supabase 永続化)
 │   └── google_oauth.py             # Google OAuth2 (Supabase 永続化)
@@ -50,11 +68,55 @@ yuru_health/
 │   ├── secrets.example.yaml        # secrets テンプレート
 │   └── settings.example.yaml       # settings テンプレート
 ├── .github/workflows/
-│   └── periodic_fetch.yml          # 5 分おき自動取得
+│   └── periodic_fetch.yml          # 15 分間隔自動取得 (ラウンド数回避 cron)
 ├── .env.example                    # 環境変数テンプレート
 ├── requirements.txt
 └── README.md
 ```
+
+## 🏗️ アーキテクチャ
+
+```
+[Oura / Withings / Google Fit / SwitchBot / Weather]
+        │
+        ▼
+  src/main.py --auto  ← GitHub Actions (cron: 3,18,33,48 * * * *)
+        │
+        ▼
+  DatabaseManager.save_raw_data()
+    ├─ _strip_volatile()  → メタデータ除外
+    ├─ _payload_hash()    → SHA-256 比較 (重複スキップ)
+    ├─ _extract_recorded_at() → payload からタイムスタンプ導出
+    └─ INSERT (fetched_at=JST now, recorded_at=導出値)
+        │
+        ▼
+  Supabase (raw_data_lake)
+        │
+        ▼
+  app.py (Streamlit UI)
+    ├─ 記録の足跡 (Sparklines + Badges HTML テーブル)
+    ├─ 今日のメトリクス
+    ├─ Gemini AI Deep Insight
+    └─ Raw Data View (サイドバー)
+```
+
+### ハッシュガードの仕組み
+
+```
+新規 payload → _strip_volatile() で変動キーを除外
+                    │
+                    ▼
+              _payload_hash() → SHA-256
+                    │
+                    ▼
+         既存の最新レコードのハッシュと比較
+            │                    │
+         一致 → SKIP          不一致 → INSERT
+     (ログ出力)           (fetched_at + recorded_at 付き)
+```
+
+**除外キー (`_VOLATILE_KEYS`):**
+`dt`, `t`, `time`, `timestamp`, `ts`, `server_time`, `fetched_at`, `recorded_at`, `updated_at`, `created_at`, `cod`
 
 ## 🚀 セットアップ
 
@@ -111,7 +173,10 @@ cp .env.example .env
 ### 3. GitHub Actions (自動取得)
 
 リポジトリの **Settings → Secrets and variables → Actions** に上記の環境変数を登録すると、
-5 分おきに全 Fetcher が自動実行されます。手動実行は Actions タブの **"Run workflow"** から。
+15 分間隔で全 Fetcher が自動実行されます。手動実行は Actions タブの **"Run workflow"** から。
+
+> **Note:** cron はラウンド数 (`:00`, `:05`) を避けた `3,18,33,48` 分に設定し、
+> GitHub Actions のスケジューリング遅延を軽減しています。
 
 ### 4. Streamlit Cloud
 
@@ -168,6 +233,7 @@ CREATE TABLE raw_data_lake (
     id BIGSERIAL PRIMARY KEY,
     user_id TEXT NOT NULL,
     fetched_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    recorded_at TIMESTAMPTZ NOT NULL,
     source TEXT NOT NULL,
     category TEXT NOT NULL,
     payload JSONB NOT NULL DEFAULT '{}',
@@ -176,40 +242,6 @@ CREATE TABLE raw_data_lake (
 
 -- その他: weight_data, oura_data, google_fit_data, environmental_logs
 -- (スキーマは src/database_manager.py の insert メソッドを参照)
-```
-
-## 🔌 API 連携
-
-| サービス | 認証方式 | 取得データ | トークン保存先 |
-|---------|---------|-----------|-------------|
-| Oura Ring | Personal Token | 睡眠・活動・コンディション・歩数 | 環境変数 |
-| Withings | OAuth 2.0 | 体重 | Supabase |
-| Google Fit | OAuth 2.0 | 歩数・睡眠・体重 (Samsung Health 経由) | Supabase |
-| SwitchBot | API Token + HMAC | CO2・気温・湿度 | 環境変数 |
-| OpenWeatherMap | API Key | 天気・気温・湿度・気圧 | 環境変数 |
-| Gemini AI | API Key | 健康データ Deep Insight 分析 | 環境変数 |
-
-## 🏗️ アーキテクチャ
-
-```
-[Oura / Withings / Google Fit / SwitchBot / Weather]
-        │
-        ▼
-  src/main.py --auto  ← GitHub Actions (*/5 * * * *)
-        │
-        ▼
-  DatabaseManager.save_raw_data()
-    ├─ SHA-256 hash-guard (重複スキップ)
-    └─ INSERT with fetched_at timestamp
-        │
-        ▼
-  Supabase (raw_data_lake)
-        │
-        ▼
-  app.py (Streamlit UI)
-    ├─ 記録の足跡グリッド
-    ├─ 今日のメトリクス
-    └─ Gemini AI Deep Insight
 ```
 
 ## 🔌 拡張方法
@@ -233,15 +265,17 @@ class NewServiceFetcher(BaseFetcher):
 - API には利用制限があります。過度なリクエストは避けてください
 - OAuth トークンは Supabase の `oauth_tokens` テーブルに永続保存されます
 - GitHub Actions の無料枠: Public リポジトリは無制限、Private は月 2,000 分
+- 全タイムスタンプは JST (UTC+9) で統一されています
 
 ## 🛠️ 技術スタック
 
-- **Language**: Python 3.10
-- **Frontend**: Streamlit
+- **Language**: Python 3.10+
+- **Frontend**: Streamlit (SVG Sparklines + HTML テーブル)
 - **Database**: Supabase (PostgreSQL)
 - **AI**: Google Gemini API
-- **CI/CD**: GitHub Actions (5 分間隔 cron)
+- **CI/CD**: GitHub Actions (15 分間隔 cron)
 - **Deploy**: Streamlit Community Cloud
+- **Timezone**: JST (UTC+9) 統一
 
 ## 📄 ライセンス
 

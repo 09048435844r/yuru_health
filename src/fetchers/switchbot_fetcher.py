@@ -6,7 +6,6 @@ import time
 import uuid
 import requests
 from typing import Dict, Any, Optional
-from datetime import datetime
 from src.utils.secrets_loader import load_secrets
 
 logger = logging.getLogger(__name__)

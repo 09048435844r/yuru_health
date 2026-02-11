@@ -1,11 +1,11 @@
 import logging
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta, timezone
-
-_JST = timezone(timedelta(hours=9))
 import requests
 from src.base_fetcher import BaseFetcher
 from auth.withings_oauth import WithingsOAuth
+
+_JST = timezone(timedelta(hours=9))
 
 logger = logging.getLogger(__name__)
 

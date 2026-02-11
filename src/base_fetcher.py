@@ -1,9 +1,9 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta, timezone
+import json
 
 _JST = timezone(timedelta(hours=9))
-import json
 
 
 class BaseFetcher(ABC):

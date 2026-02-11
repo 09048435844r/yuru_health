@@ -1,11 +1,11 @@
 import json
 import logging
 import requests
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Optional
 from datetime import datetime, timedelta, timezone
+from src.utils.secrets_loader import load_secrets
 
 _JST = timezone(timedelta(hours=9))
-from src.utils.secrets_loader import load_secrets
 
 logger = logging.getLogger(__name__)
 

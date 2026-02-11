@@ -43,8 +43,6 @@ class GoogleFitFetcher:
         """
         start_dt, end_dt = self._parse_date_range(start_date, end_date)
         
-        dataset_id = f"{self._time_millis(start_dt) * 1000000}-{self._time_millis(end_dt) * 1000000}"
-        
         body = {
             "aggregateBy": [{
                 "dataTypeName": "com.google.step_count.delta",
