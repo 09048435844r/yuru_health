@@ -518,6 +518,14 @@ def main():
             st.info(f"**環境:** {db_manager.env}")
             st.info(f"**DB:** {db_manager.db_config['type']}")
             st.caption(f"Model: {gemini_settings.get('model_name', 'N/A')}")
+        
+        if st.checkbox("🗄️ Raw Data View", value=False):
+            raw_rows = db_manager.get_raw_data_recent(limit=100)
+            if raw_rows:
+                df_raw = pd.DataFrame(raw_rows)
+                st.dataframe(df_raw, use_container_width=True)
+            else:
+                st.caption("raw_data_lake にデータがありません")
 
 
 if __name__ == "__main__":

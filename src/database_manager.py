@@ -290,6 +290,17 @@ class DatabaseManager:
                 badge["sleep_min"] = int(val)
         return badge
     
+    def get_raw_data_recent(self, limit: int = 100) -> List[Dict[str, Any]]:
+        """raw_data_lake の最新 N 件を返す"""
+        response = (
+            self.supabase.table("raw_data_lake")
+            .select("id, user_id, fetched_at, source, category, payload")
+            .order("fetched_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        return response.data
+
     def get_raw_data_by_date(self, target_date: str, user_id: str = "user_001") -> Dict[str, List[Dict[str, Any]]]:
         """指定日の最新 fetched_at のデータを source ごとに整理して返す"""
         start = f"{target_date}T00:00:00"
