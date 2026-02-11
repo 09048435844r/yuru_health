@@ -121,6 +121,9 @@ class WithingsOAuth:
         expires_at = self.tokens.get("expires_at")
         if expires_at:
             expires_datetime = datetime.fromisoformat(expires_at)
+            # naive な ISO 文字列 (旧トークン) に JST を付与して aware 化
+            if expires_datetime.tzinfo is None:
+                expires_datetime = expires_datetime.replace(tzinfo=JST)
             if datetime.now(JST) >= expires_datetime - timedelta(minutes=5):
                 try:
                     self.refresh_access_token()
