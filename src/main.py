@@ -8,7 +8,9 @@ Usage:
 import argparse
 import logging
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+
+JST = timezone(timedelta(hours=9))
 
 logging.basicConfig(
     level=logging.INFO,
@@ -35,7 +37,7 @@ def run_all_fetchers():
 
     db_manager = DatabaseManager()
 
-    end_dt = datetime.now()
+    end_dt = datetime.now(JST)
     start_dt = end_dt - timedelta(days=7)
     start_str = start_dt.strftime("%Y-%m-%d")
     end_str = end_dt.strftime("%Y-%m-%d")

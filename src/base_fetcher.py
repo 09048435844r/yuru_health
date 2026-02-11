@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Any, List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+
+_JST = timezone(timedelta(hours=9))
 import json
 
 
@@ -27,4 +29,4 @@ class BaseFetcher(ABC):
         return self.last_fetch_time
     
     def update_fetch_time(self):
-        self.last_fetch_time = datetime.now()
+        self.last_fetch_time = datetime.now(_JST)

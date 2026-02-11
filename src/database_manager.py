@@ -1,12 +1,20 @@
 import hashlib
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any, List
 from supabase import create_client, Client
 from src.utils.secrets_loader import load_secrets
 
+# JST (UTC+9) タイムゾーン
+JST = timezone(timedelta(hours=9))
+
 logger = logging.getLogger(__name__)
+
+
+def _now_jst() -> datetime:
+    """現在の日本時間 (aware datetime) を返す"""
+    return datetime.now(JST)
 
 
 class DatabaseManager:
@@ -122,8 +130,7 @@ class DatabaseManager:
     
     def get_data_arrival_history(self, days: int = 14) -> List[Dict[str, Any]]:
         """過去N日間の (source, fetched_date) リストを raw_data_lake から取得"""
-        from datetime import timedelta
-        start_date = (datetime.utcnow() - timedelta(days=days)).isoformat()
+        start_date = (_now_jst() - timedelta(days=days)).isoformat()
         response = (
             self.supabase.table("raw_data_lake")
             .select("source, fetched_at")
@@ -158,8 +165,7 @@ class DatabaseManager:
               ...
             }
         """
-        from datetime import timedelta
-        start_date = (datetime.utcnow() - timedelta(days=days)).isoformat()
+        start_date = (_now_jst() - timedelta(days=days)).isoformat()
         response = (
             self.supabase.table("raw_data_lake")
             .select("source, category, fetched_at, payload")
@@ -347,7 +353,40 @@ class DatabaseManager:
         stable = cls._strip_volatile(payload)
         canonical = json.dumps(stable, sort_keys=True, ensure_ascii=False, default=str)
         return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
-    
+
+    @staticmethod
+    def _extract_recorded_at(payload: Any, fallback: datetime) -> str:
+        """payload 内のタイムスタンプ候補から recorded_at を導出する。
+        見つからなければ fallback (JST now) の ISO 文字列を返す。"""
+        if not isinstance(payload, dict):
+            return fallback.isoformat()
+
+        # Unix epoch 系キー (dt, timestamp, ts, t, time)
+        for key in ("dt", "timestamp", "ts", "t", "time"):
+            val = payload.get(key)
+            if isinstance(val, (int, float)) and val > 1_000_000_000:
+                try:
+                    return datetime.fromtimestamp(val, tz=JST).isoformat()
+                except (OSError, ValueError):
+                    continue
+
+        # ISO 文字列系キー (recorded_at, date, day)
+        for key in ("recorded_at", "date", "day"):
+            val = payload.get(key)
+            if isinstance(val, str) and len(val) >= 10:
+                try:
+                    dt = datetime.fromisoformat(val.replace("Z", "+00:00"))
+                    return dt.astimezone(JST).isoformat()
+                except ValueError:
+                    # "2026-02-11" のような日付のみの場合
+                    try:
+                        dt = datetime.strptime(val[:10], "%Y-%m-%d").replace(tzinfo=JST)
+                        return dt.isoformat()
+                    except ValueError:
+                        continue
+
+        return fallback.isoformat()
+
     def save_raw_data(self, user_id: str, source: str,
                       category: str, payload: Any, **_kwargs):
         """raw_data_lake にハッシュガード付きで INSERT する。
@@ -380,9 +419,12 @@ class DatabaseManager:
                     logger.info(f"Skipped duplicate for {source}/{category}")
                     return
             
+            now = _now_jst()
+            recorded_at = self._extract_recorded_at(new_payload, now)
             data = {
                 "user_id": user_id,
-                "fetched_at": datetime.utcnow().isoformat(),
+                "fetched_at": now.isoformat(),
+                "recorded_at": recorded_at,
                 "source": source,
                 "category": category,
                 "payload": new_payload,

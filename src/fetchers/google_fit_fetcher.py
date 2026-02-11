@@ -1,7 +1,9 @@
 import json
 import logging
 from typing import Dict, Any, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+
+_JST = timezone(timedelta(hours=9))
 
 logger = logging.getLogger(__name__)
 
@@ -206,7 +208,7 @@ class GoogleFitFetcher:
         if end_date:
             end_dt = datetime.strptime(end_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
         else:
-            end_dt = datetime.now()
+            end_dt = datetime.now(_JST)
         
         if start_date:
             start_dt = datetime.strptime(start_date, "%Y-%m-%d")

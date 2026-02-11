@@ -1,7 +1,9 @@
 import logging
 import requests
 from typing import Dict, Any, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+
+_JST = timezone(timedelta(hours=9))
 from src.base_fetcher import BaseFetcher
 from src.utils.secrets_loader import load_secrets
 
@@ -26,7 +28,7 @@ class OuraFetcher(BaseFetcher):
             raise Exception("Oura personal token is not configured. Please set it in config/secrets.yaml")
         
         if not end_date:
-            end = datetime.now()
+            end = datetime.now(_JST)
         else:
             end = datetime.fromisoformat(end_date)
         

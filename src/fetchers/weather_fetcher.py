@@ -2,7 +2,9 @@ import json
 import logging
 import requests
 from typing import Dict, Any, Optional, Tuple
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+
+_JST = timezone(timedelta(hours=9))
 from src.utils.secrets_loader import load_secrets
 
 logger = logging.getLogger(__name__)
@@ -101,7 +103,7 @@ class WeatherFetcher:
                 "pressure": pressure,
                 "city_name": city_name,
                 "raw_data": json.dumps(data, ensure_ascii=False),
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now(_JST).isoformat()
             }
         
         except requests.exceptions.Timeout:

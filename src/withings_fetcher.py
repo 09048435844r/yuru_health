@@ -1,6 +1,8 @@
 import logging
 from typing import Dict, Any, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+
+_JST = timezone(timedelta(hours=9))
 import requests
 from src.base_fetcher import BaseFetcher
 from auth.withings_oauth import WithingsOAuth
@@ -28,7 +30,7 @@ class WithingsFetcher(BaseFetcher):
             raise Exception("Not authenticated. Please complete OAuth flow first.")
         
         if not end_date:
-            end = datetime.now()
+            end = datetime.now(_JST)
         else:
             end = datetime.fromisoformat(end_date)
         

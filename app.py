@@ -2,7 +2,9 @@ import logging
 import streamlit as st
 import pandas as pd
 import yaml
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+
+JST = timezone(timedelta(hours=9))
 
 logger = logging.getLogger(__name__)
 from src.database_manager import DatabaseManager
@@ -95,7 +97,7 @@ def refresh_data(db_manager: DatabaseManager, user_id: str = "user_001"):
     try:
         with st.spinner("データを更新中..."):
             logger.info("=== refresh_data started ===")
-            end_dt = datetime.now()
+            end_dt = datetime.now(JST)
             start_dt = end_dt - timedelta(days=7)
             start_str = start_dt.strftime("%Y-%m-%d")
             end_str = end_dt.strftime("%Y-%m-%d")
@@ -349,7 +351,7 @@ def main():
     
     if evaluator.is_available():
         if st.button("🔍 AI Deep Insight (生データ分析)", use_container_width=True):
-            yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+            yesterday = (datetime.now(JST) - timedelta(days=1)).strftime("%Y-%m-%d")
             with st.spinner("生データを取得中..."):
                 raw_data = db_manager.get_raw_data_by_date(yesterday)
             if not raw_data:
@@ -435,7 +437,7 @@ def main():
                         creds = google_oauth.get_credentials()
                         if creds:
                             fetcher = GoogleFitFetcher(creds, db_manager=db_manager)
-                            end_dt = datetime.now()
+                            end_dt = datetime.now(JST)
                             start_dt = end_dt - timedelta(days=7)
                             start_str = start_dt.strftime("%Y-%m-%d")
                             end_str = end_dt.strftime("%Y-%m-%d")
