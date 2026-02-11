@@ -1,0 +1,56 @@
+name: Periodic Data Fetch
+
+on:
+  schedule:
+    # 15 分おきに実行 (UTC)
+    - cron: "*/15 * * * *"
+  workflow_dispatch: # 手動実行も可能
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      TZ: Asia/Tokyo
+      # ── Supabase ──
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+      # ── Oura Ring ──
+      OURA_PERSONAL_TOKEN: ${{ secrets.OURA_PERSONAL_TOKEN }}
+      # ── Gemini AI ──
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      GEMINI_MODEL_NAME: ${{ secrets.GEMINI_MODEL_NAME }}
+      # ── OpenWeatherMap ──
+      OPENWEATHERMAP_API_KEY: ${{ secrets.OPENWEATHERMAP_API_KEY }}
+      OPENWEATHERMAP_DEFAULT_LAT: ${{ secrets.OPENWEATHERMAP_DEFAULT_LAT }}
+      OPENWEATHERMAP_DEFAULT_LON: ${{ secrets.OPENWEATHERMAP_DEFAULT_LON }}
+      # ── Withings ──
+      WITHINGS_CLIENT_ID: ${{ secrets.WITHINGS_CLIENT_ID }}
+      WITHINGS_CLIENT_SECRET: ${{ secrets.WITHINGS_CLIENT_SECRET }}
+      WITHINGS_REDIRECT_URI: ${{ secrets.WITHINGS_REDIRECT_URI }}
+      # ── Google OAuth ──
+      GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+      GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+      GOOGLE_REDIRECT_URI_CLOUD: ${{ secrets.GOOGLE_REDIRECT_URI_CLOUD }}
+      GOOGLE_REDIRECT_URI_LOCAL: ${{ secrets.GOOGLE_REDIRECT_URI_LOCAL }}
+      # ── SwitchBot ──
+      SWITCHBOT_TOKEN: ${{ secrets.SWITCHBOT_TOKEN }}
+      SWITCHBOT_SECRET: ${{ secrets.SWITCHBOT_SECRET }}
+      SWITCHBOT_DEVICE_ID: ${{ secrets.SWITCHBOT_DEVICE_ID }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run auto-fetch
+        run: python -m src.main --auto
