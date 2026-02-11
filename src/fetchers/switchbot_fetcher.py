@@ -79,7 +79,6 @@ class SwitchBotFetcher:
             if self.db_manager:
                 self.db_manager.save_raw_data(
                     user_id="system",
-                    recorded_at=datetime.now().strftime("%Y-%m-%d"),
                     source="switchbot",
                     category="environment",
                     payload=body,

@@ -32,7 +32,7 @@ st.set_page_config(
 
 def get_database_manager():
     obj = st.session_state.get("_db_manager")
-    if obj is None or not hasattr(obj, "_payload_key_count"):
+    if obj is None or not hasattr(obj, "_payload_hash"):
         st.session_state["_db_manager"] = DatabaseManager("config/secrets.yaml")
     return st.session_state["_db_manager"]
 
@@ -45,9 +45,16 @@ def get_withings_oauth(db_manager):
 
 @st.cache_resource
 def load_gemini_settings():
-    with open("config/settings.yaml", "r", encoding="utf-8") as f:
-        settings = yaml.safe_load(f)
-        return settings.get("gemini", {})
+    import os
+    model_from_env = os.getenv("GEMINI_MODEL_NAME")
+    if model_from_env:
+        return {"model_name": model_from_env}
+    try:
+        with open("config/settings.yaml", "r", encoding="utf-8") as f:
+            settings = yaml.safe_load(f)
+            return settings.get("gemini", {})
+    except FileNotFoundError:
+        return {}
 
 
 @st.cache_resource
@@ -315,7 +322,7 @@ def main():
     
     arrival_set = set()
     for row in arrival_history:
-        arrival_set.add((row["source"], row["recorded_at"]))
+        arrival_set.add((row["source"], row["fetched_date"]))
     
     total_dots = 0
     green_dots = 0

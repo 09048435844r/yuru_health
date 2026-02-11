@@ -194,10 +194,8 @@ class GoogleFitFetcher:
         if not self.db_manager:
             logger.info("GoogleFitFetcher: db_manager is None, skipping save")
             return
-        recorded_at = datetime.now().strftime("%Y-%m-%d")
         self.db_manager.save_raw_data(
             user_id=user_id,
-            recorded_at=recorded_at,
             source="google_fit",
             category=category,
             payload=raw_response,

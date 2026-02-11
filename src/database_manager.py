@@ -1,5 +1,7 @@
+import hashlib
 import json
 import logging
+from datetime import datetime
 from typing import Optional, Dict, Any, List
 from supabase import create_client, Client
 from src.utils.secrets_loader import load_secrets
@@ -119,24 +121,37 @@ class DatabaseManager:
         return response.data
     
     def get_data_arrival_history(self, days: int = 14) -> List[Dict[str, Any]]:
-        """過去N日間の (source, recorded_at) リストを raw_data_lake から取得"""
-        from datetime import datetime, timedelta
-        start_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+        """過去N日間の (source, fetched_date) リストを raw_data_lake から取得"""
+        from datetime import timedelta
+        start_date = (datetime.utcnow() - timedelta(days=days)).isoformat()
         response = (
             self.supabase.table("raw_data_lake")
-            .select("source, recorded_at")
-            .gte("recorded_at", start_date)
+            .select("source, fetched_at")
+            .gte("fetched_at", start_date)
             .execute()
         )
-        return response.data
+        # fetched_at (timestamp) を日付文字列に変換して返す
+        results = []
+        seen = set()
+        for row in response.data:
+            fetched_date = row["fetched_at"][:10]  # "2026-02-11T..." -> "2026-02-11"
+            key = (row["source"], fetched_date)
+            if key not in seen:
+                seen.add(key)
+                results.append({"source": row["source"], "fetched_date": fetched_date})
+        return results
     
     def get_raw_data_by_date(self, target_date: str, user_id: str = "user_001") -> Dict[str, List[Dict[str, Any]]]:
-        """指定日の生データを source ごとに整理して返す"""
+        """指定日の最新 fetched_at のデータを source ごとに整理して返す"""
+        start = f"{target_date}T00:00:00"
+        end = f"{target_date}T23:59:59"
         response = (
             self.supabase.table("raw_data_lake")
             .select("*")
             .eq("user_id", user_id)
-            .eq("recorded_at", target_date)
+            .gte("fetched_at", start)
+            .lte("fetched_at", end)
+            .order("fetched_at", desc=True)
             .execute()
         )
         result: Dict[str, List[Dict[str, Any]]] = {}
@@ -145,53 +160,53 @@ class DatabaseManager:
             result.setdefault(source, []).append(row)
         return result
     
-    def _payload_key_count(self, payload: Any) -> int:
-        """payload の情報密度（キー数）を再帰的にカウント"""
-        if isinstance(payload, dict):
-            count = len(payload)
-            for v in payload.values():
-                count += self._payload_key_count(v)
-            return count
-        if isinstance(payload, list):
-            return sum(self._payload_key_count(item) for item in payload)
-        return 0
+    @staticmethod
+    def _payload_hash(payload: Any) -> str:
+        """payload の SHA-256 ハッシュを返す（重複検知用）"""
+        canonical = json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str)
+        return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     
-    def save_raw_data(self, user_id: str, recorded_at: str, source: str,
-                      category: str, payload: Any):
-        """raw_data_lake にデータ密度優先で UPSERT する"""
+    def save_raw_data(self, user_id: str, source: str,
+                      category: str, payload: Any, **_kwargs):
+        """raw_data_lake にハッシュガード付きで INSERT する。
+        
+        制約: unique_raw_data_v2 (user_id, fetched_at, source, category)
+        ロジック:
+          1. 同一 source/category の最新レコードの payload ハッシュと比較
+          2. 中身が同じ → スキップ（重複防止）
+          3. 中身が異なる → 新規 INSERT（fetched_at = now）
+        """
         try:
             new_payload = payload if isinstance(payload, dict) else self._parse_raw_data(payload)
+            new_hash = self._payload_hash(new_payload)
             
-            # 既存レコードを検索
+            # 同一 source/category の最新レコードを取得
             existing = (
                 self.supabase.table("raw_data_lake")
                 .select("id, payload")
                 .eq("user_id", user_id)
-                .eq("recorded_at", recorded_at)
                 .eq("source", source)
                 .eq("category", category)
+                .order("fetched_at", desc=True)
+                .limit(1)
                 .execute()
             )
             
             if existing.data:
-                old_payload = existing.data[0].get("payload", {})
-                old_density = self._payload_key_count(old_payload)
-                new_density = self._payload_key_count(new_payload)
-                if new_density > old_density:
-                    row_id = existing.data[0]["id"]
-                    self.supabase.table("raw_data_lake").update(
-                        {"payload": new_payload}
-                    ).eq("id", row_id).execute()
-                    logger.info(f"save_raw_data UPDATED: {source}/{category} density {old_density}->{new_density}")
-            else:
-                data = {
-                    "user_id": user_id,
-                    "recorded_at": recorded_at,
-                    "source": source,
-                    "category": category,
-                    "payload": new_payload,
-                }
-                self.supabase.table("raw_data_lake").insert(data).execute()
+                old_hash = self._payload_hash(existing.data[0].get("payload", {}))
+                if new_hash == old_hash:
+                    logger.info(f"save_raw_data SKIP (unchanged): {source}/{category}")
+                    return
+            
+            data = {
+                "user_id": user_id,
+                "fetched_at": datetime.utcnow().isoformat(),
+                "source": source,
+                "category": category,
+                "payload": new_payload,
+            }
+            self.supabase.table("raw_data_lake").insert(data).execute()
+            logger.info(f"save_raw_data INSERT: {source}/{category}")
         except Exception as e:
             logger.warning(f"save_raw_data failed: source={source}, category={category}, error={e}")
     

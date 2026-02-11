@@ -59,15 +59,12 @@ class OuraFetcher(BaseFetcher):
             logger.info("OuraFetcher: db_manager is None, skipping save")
             return
         for item in raw_response.get("data", []):
-            recorded_at = item.get("day", "")
-            if recorded_at:
-                self.db_manager.save_raw_data(
-                    user_id=user_id,
-                    recorded_at=recorded_at,
-                    source="oura",
-                    category=category,
-                    payload=item,
-                )
+            self.db_manager.save_raw_data(
+                user_id=user_id,
+                source="oura",
+                category=category,
+                payload=item,
+            )
     
     def _fetch_daily_activity(self, start_date: str, end_date: str) -> Dict[str, Any]:
         url = f"{self.API_BASE_URL}/daily_activity"

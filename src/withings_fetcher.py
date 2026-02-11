@@ -56,10 +56,8 @@ class WithingsFetcher(BaseFetcher):
         if raw_response.get("status") != 0:
             return
         for grp in raw_response.get("body", {}).get("measuregrps", []):
-            recorded_at = datetime.fromtimestamp(grp["date"]).strftime("%Y-%m-%d")
             self.db_manager.save_raw_data(
                 user_id=user_id,
-                recorded_at=recorded_at,
                 source="withings",
                 category="measure",
                 payload=grp,
