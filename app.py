@@ -14,7 +14,7 @@ from auth.withings_oauth import WithingsOAuth
 from src.evaluators.gemini_evaluator import GeminiEvaluator
 from auth.google_oauth import GoogleOAuth
 from src.fetchers.google_fit_fetcher import GoogleFitFetcher, GOOGLE_FIT_AVAILABLE
-from src.utils.sparkline import render_sparkline_cell, render_badge_cell
+from src.utils.sparkline import build_footprint_html
 
 try:
     from streamlit_js_eval import get_geolocation
@@ -309,47 +309,8 @@ def main():
     st.subheader("👣 記録の足跡")
     
     rich_history = db_manager.get_data_arrival_rich(days=14)
-    
-    source_labels = {
-        "oura": "Oura Ring",
-        "withings": "Withings",
-        "google_fit": "Google Fit",
-        "weather": "Weather",
-        "switchbot": "SwitchBot",
-    }
-    sparkline_sources = {"switchbot", "weather"}
-    
-    today = datetime.now().date()
-    date_range = [(today - timedelta(days=i)) for i in range(13, -1, -1)]
-    
-    total_cells = 0
-    filled_cells = 0
-    
-    # 日付ヘッダー行
-    header_cols = st.columns([2] + [1] * 14)
-    header_cols[0].caption("")
-    for i, d in enumerate(date_range):
-        header_cols[i + 1].markdown(
-            f'<div style="text-align:center;font-size:10px;color:#999">{d.strftime("%m/%d")}</div>',
-            unsafe_allow_html=True,
-        )
-    
-    for source_key, source_label in source_labels.items():
-        cols = st.columns([2] + [1] * 14)
-        cols[0].caption(source_label)
-        for i, d in enumerate(date_range):
-            date_str = d.strftime("%Y-%m-%d")
-            total_cells += 1
-            cell_data = rich_history.get((source_key, date_str))
-            has_data = cell_data is not None and cell_data.get("has_data")
-            if has_data:
-                filled_cells += 1
-
-            if source_key in sparkline_sources:
-                html = render_sparkline_cell(cell_data, source_key)
-            else:
-                html = render_badge_cell(cell_data, source_key)
-            cols[i + 1].markdown(html, unsafe_allow_html=True)
+    footprint_html, total_cells, filled_cells = build_footprint_html(rich_history, days=14)
+    st.markdown(footprint_html, unsafe_allow_html=True)
     
     if filled_cells > 0:
         rate = filled_cells / total_cells * 100
