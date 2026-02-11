@@ -320,10 +320,32 @@ class DatabaseManager:
             result.setdefault(source, []).append(row)
         return result
     
-    @staticmethod
-    def _payload_hash(payload: Any) -> str:
-        """payload の SHA-256 ハッシュを返す（重複検知用）"""
-        canonical = json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str)
+    # ハッシュ計算時に除外する変動キー（API レスポンスに含まれる現在時刻等）
+    _VOLATILE_KEYS = frozenset({
+        "dt", "t", "time", "timestamp", "ts", "server_time",
+        "fetched_at", "recorded_at", "updated_at", "created_at",
+        "cod",  # OpenWeatherMap の内部コード
+    })
+
+    @classmethod
+    def _strip_volatile(cls, obj: Any) -> Any:
+        """payload から変動するメタデータキーを再帰的に除外したコピーを返す"""
+        if isinstance(obj, dict):
+            return {
+                k: cls._strip_volatile(v)
+                for k, v in obj.items()
+                if k not in cls._VOLATILE_KEYS
+            }
+        if isinstance(obj, list):
+            return [cls._strip_volatile(item) for item in obj]
+        return obj
+
+    @classmethod
+    def _payload_hash(cls, payload: Any) -> str:
+        """payload の SHA-256 ハッシュを返す（重複検知用）。
+        変動するタイムスタンプ系キーを除外してから計算する。"""
+        stable = cls._strip_volatile(payload)
+        canonical = json.dumps(stable, sort_keys=True, ensure_ascii=False, default=str)
         return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     
     def save_raw_data(self, user_id: str, source: str,
@@ -355,7 +377,7 @@ class DatabaseManager:
             if existing.data:
                 old_hash = self._payload_hash(existing.data[0].get("payload", {}))
                 if new_hash == old_hash:
-                    logger.info(f"save_raw_data SKIP (unchanged): {source}/{category}")
+                    logger.info(f"Skipped duplicate for {source}/{category}")
                     return
             
             data = {
