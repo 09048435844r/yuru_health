@@ -14,6 +14,7 @@ from auth.withings_oauth import WithingsOAuth
 from src.evaluators.gemini_evaluator import GeminiEvaluator
 from auth.google_oauth import GoogleOAuth
 from src.fetchers.google_fit_fetcher import GoogleFitFetcher, GOOGLE_FIT_AVAILABLE
+from src.utils.sparkline import render_sparkline_cell, render_badge_cell
 
 try:
     from streamlit_js_eval import get_geolocation
@@ -307,7 +308,7 @@ def main():
     # ── 記録の足跡 (Data Footprints) ──
     st.subheader("👣 記録の足跡")
     
-    arrival_history = db_manager.get_data_arrival_history(days=14)
+    rich_history = db_manager.get_data_arrival_rich(days=14)
     
     source_labels = {
         "oura": "Oura Ring",
@@ -316,39 +317,45 @@ def main():
         "weather": "Weather",
         "switchbot": "SwitchBot",
     }
+    sparkline_sources = {"switchbot", "weather"}
     
     today = datetime.now().date()
     date_range = [(today - timedelta(days=i)) for i in range(13, -1, -1)]
     
-    arrival_set = set()
-    for row in arrival_history:
-        arrival_set.add((row["source"], row["fetched_date"]))
+    total_cells = 0
+    filled_cells = 0
     
-    total_dots = 0
-    green_dots = 0
+    # 日付ヘッダー行
+    header_cols = st.columns([2] + [1] * 14)
+    header_cols[0].caption("")
+    for i, d in enumerate(date_range):
+        header_cols[i + 1].markdown(
+            f'<div style="text-align:center;font-size:10px;color:#999">{d.strftime("%m/%d")}</div>',
+            unsafe_allow_html=True,
+        )
     
     for source_key, source_label in source_labels.items():
         cols = st.columns([2] + [1] * 14)
         cols[0].caption(source_label)
         for i, d in enumerate(date_range):
             date_str = d.strftime("%Y-%m-%d")
-            total_dots += 1
-            if (source_key, date_str) in arrival_set:
-                cols[i + 1].markdown("🟢")
-                green_dots += 1
+            total_cells += 1
+            cell_data = rich_history.get((source_key, date_str))
+            has_data = cell_data is not None and cell_data.get("has_data")
+            if has_data:
+                filled_cells += 1
+
+            if source_key in sparkline_sources:
+                html = render_sparkline_cell(cell_data, source_key)
             else:
-                cols[i + 1].markdown("⚪")
+                html = render_badge_cell(cell_data, source_key)
+            cols[i + 1].markdown(html, unsafe_allow_html=True)
     
-    date_header_cols = st.columns([2] + [1] * 14)
-    date_header_cols[0].caption("")
-    for i, d in enumerate(date_range):
-        date_header_cols[i + 1].caption(d.strftime("%d"))
-    
-    if green_dots > 0:
-        rate = green_dots / total_dots * 100
-        st.success(f"🎉 過去14日間で **{green_dots}件** のデータが届いています（到達率 {rate:.0f}%）。記録を続けていること自体が素晴らしい！")
+    if filled_cells > 0:
+        rate = filled_cells / total_cells * 100
+        st.success(f"🎉 過去14日間で **{filled_cells}件** のデータが届いています（到達率 {rate:.0f}%）。記録を続けていること自体が素晴らしい！")
     else:
-        st.info("まだデータがありません。� ボタンでデータを取得してみましょう。")
+        st.info("まだデータがありません。🔄 ボタンでデータを取得してみましょう。")
     
     st.markdown("---")
     

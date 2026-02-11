@@ -140,6 +140,155 @@ class DatabaseManager:
                 seen.add(key)
                 results.append({"source": row["source"], "fetched_date": fetched_date})
         return results
+
+    def get_data_arrival_rich(self, days: int = 14) -> Dict[str, Dict[str, Any]]:
+        """過去N日間の source×date ごとにサマリー統計と時系列サンプルを返す。
+
+        Returns:
+            {
+              ("switchbot", "2026-02-11"): {
+                "has_data": True,
+                "timeseries": [{"hour": 0, "temp": 22.1, "humidity": 45}, ...],
+                "summary": {"temp_avg": 22.5, "humidity_avg": 48, ...},
+              },
+              ("oura", "2026-02-11"): {
+                "has_data": True,
+                "badge": {"sleep_score": 82, "activity_score": 75, "readiness_score": 88},
+              },
+              ...
+            }
+        """
+        from datetime import timedelta
+        start_date = (datetime.utcnow() - timedelta(days=days)).isoformat()
+        response = (
+            self.supabase.table("raw_data_lake")
+            .select("source, category, fetched_at, payload")
+            .gte("fetched_at", start_date)
+            .order("fetched_at")
+            .execute()
+        )
+
+        # source×date ごとにレコードを集約
+        buckets: Dict[tuple, list] = {}
+        for row in response.data:
+            fetched_date = row["fetched_at"][:10]
+            key = (row["source"], fetched_date)
+            buckets.setdefault(key, []).append(row)
+
+        result: Dict[tuple, Dict[str, Any]] = {}
+        for key, rows in buckets.items():
+            source = key[0]
+            entry: Dict[str, Any] = {"has_data": True}
+
+            if source in ("switchbot", "weather"):
+                entry.update(self._build_timeseries(source, rows))
+            elif source == "oura":
+                entry["badge"] = self._build_oura_badge(rows)
+            elif source == "withings":
+                entry["badge"] = self._build_withings_badge(rows)
+            elif source == "google_fit":
+                entry["badge"] = self._build_google_fit_badge(rows)
+
+            result[key] = entry
+        return result
+
+    @staticmethod
+    def _build_timeseries(source: str, rows: list) -> Dict[str, Any]:
+        """SwitchBot / Weather の時系列データを構築"""
+        timeseries = []
+        for row in rows:
+            payload = row.get("payload", {})
+            if not isinstance(payload, dict):
+                continue
+            hour_str = row.get("fetched_at", "")[11:13]
+            hour = int(hour_str) if hour_str.isdigit() else 0
+
+            if source == "switchbot":
+                timeseries.append({
+                    "hour": hour,
+                    "temp": payload.get("temperature"),
+                    "humidity": payload.get("humidity"),
+                    "co2": payload.get("CO2"),
+                })
+            elif source == "weather":
+                main = payload.get("main", {})
+                timeseries.append({
+                    "hour": hour,
+                    "temp": main.get("temp"),
+                    "humidity": main.get("humidity"),
+                    "pressure": main.get("pressure"),
+                })
+
+        # サマリー統計
+        summary = {}
+        for field in ("temp", "humidity", "co2", "pressure"):
+            vals = [p[field] for p in timeseries if p.get(field) is not None]
+            if vals:
+                summary[f"{field}_avg"] = round(sum(vals) / len(vals), 1)
+                summary[f"{field}_min"] = round(min(vals), 1)
+                summary[f"{field}_max"] = round(max(vals), 1)
+
+        return {"timeseries": timeseries, "summary": summary}
+
+    @staticmethod
+    def _build_oura_badge(rows: list) -> Dict[str, Any]:
+        """Oura の代表スコアを抽出"""
+        badge: Dict[str, Any] = {}
+        for row in rows:
+            payload = row.get("payload", {})
+            cat = row.get("category", "")
+            if not isinstance(payload, dict):
+                continue
+            if cat == "sleep" and "score" in payload:
+                badge["sleep_score"] = payload["score"]
+            elif cat == "activity" and "score" in payload:
+                badge["activity_score"] = payload["score"]
+            elif cat == "readiness" and "score" in payload:
+                badge["readiness_score"] = payload["score"]
+            if "contributors" in payload and "steps" in payload.get("contributors", {}):
+                pass
+            if "steps" in payload:
+                badge["steps"] = payload["steps"]
+        return badge
+
+    @staticmethod
+    def _build_withings_badge(rows: list) -> Dict[str, Any]:
+        """Withings の体重を抽出"""
+        weights = []
+        for row in rows:
+            payload = row.get("payload", {})
+            if not isinstance(payload, dict):
+                continue
+            w = payload.get("weight")
+            if w is not None:
+                weights.append(float(w))
+            # measures 配列内の体重
+            for m in payload.get("measures", []):
+                if m.get("type") == 1:
+                    val = m.get("value", 0) * (10 ** m.get("unit", 0))
+                    if val > 0:
+                        weights.append(round(val, 1))
+        if weights:
+            return {"weight_kg": round(weights[-1], 1)}
+        return {}
+
+    @staticmethod
+    def _build_google_fit_badge(rows: list) -> Dict[str, Any]:
+        """Google Fit の歩数・体重を抽出"""
+        badge: Dict[str, Any] = {}
+        for row in rows:
+            payload = row.get("payload", {})
+            if not isinstance(payload, dict):
+                continue
+            dt = payload.get("data_type", row.get("category", ""))
+            val = payload.get("value")
+            if "step" in dt.lower() and val is not None:
+                badge["steps"] = int(val)
+            elif "weight" in dt.lower() and val is not None:
+                badge["weight_kg"] = round(float(val), 1)
+            elif "sleep" in dt.lower() and val is not None:
+                badge["sleep_min"] = int(val)
+        return badge
     
     def get_raw_data_by_date(self, target_date: str, user_id: str = "user_001") -> Dict[str, List[Dict[str, Any]]]:
         """指定日の最新 fetched_at のデータを source ごとに整理して返す"""
