@@ -326,6 +326,106 @@ class DatabaseManager:
             result.setdefault(source, []).append(row)
         return result
     
+    # ── Phase 2: 相関分析用データ取得 ──
+
+    def get_correlation_data(self, days: int = 14):
+        """睡眠スコア (Oura) と 室内環境 (SwitchBot) を結合した DataFrame を返す。
+
+        集計ロジック:
+          - Oura: source='oura', category='sleep' の payload から score を抽出。
+            日付は payload.day (YYYY-MM-DD) → recorded_at[:10] の順でフォールバック。
+          - SwitchBot: source='switchbot', category='environment' の payload から
+            temperature, humidity, CO2 を抽出し、日付ごとに平均値を算出。
+          ※ 理想的には SwitchBot を「前日22:00〜当日08:00」で集計して睡眠時間帯の
+            環境と対応付けるべきだが、Phase 2 初版では「同日の全時間帯平均」で結合する。
+            将来的に時間帯フィルタを追加予定。
+
+        Returns:
+            columns: date, sleep_score, co2_avg, temp_avg, humidity_avg
+        """
+        import pandas as pd
+
+        start_date = (_now_jst() - timedelta(days=days)).isoformat()
+
+        # ── Oura sleep データ ──
+        oura_resp = (
+            self.supabase.table("raw_data_lake")
+            .select("payload, recorded_at")
+            .eq("source", "oura")
+            .eq("category", "sleep")
+            .gte("fetched_at", start_date)
+            .order("fetched_at")
+            .execute()
+        )
+        sleep_rows: List[Dict[str, Any]] = []
+        for row in oura_resp.data:
+            payload = row.get("payload", {})
+            if not isinstance(payload, dict):
+                continue
+            score = payload.get("score")
+            if score is None:
+                continue
+            # 日付: payload.day → recorded_at[:10]
+            date_str = payload.get("day") or row.get("recorded_at", "")[:10]
+            if len(date_str) < 10:
+                continue
+            sleep_rows.append({"date": date_str[:10], "sleep_score": int(score)})
+
+        if not sleep_rows:
+            return pd.DataFrame(columns=["date", "sleep_score", "co2_avg", "temp_avg", "humidity_avg"])
+
+        df_sleep = pd.DataFrame(sleep_rows)
+        # 同日に複数レコードがある場合は最新 (最後) を採用
+        df_sleep = df_sleep.drop_duplicates(subset="date", keep="last")
+
+        # ── SwitchBot environment データ ──
+        sb_resp = (
+            self.supabase.table("raw_data_lake")
+            .select("payload, fetched_at")
+            .eq("source", "switchbot")
+            .eq("category", "environment")
+            .gte("fetched_at", start_date)
+            .order("fetched_at")
+            .execute()
+        )
+        env_rows: List[Dict[str, Any]] = []
+        for row in sb_resp.data:
+            payload = row.get("payload", {})
+            if not isinstance(payload, dict):
+                continue
+            date_str = row.get("fetched_at", "")[:10]
+            if len(date_str) < 10:
+                continue
+            env_rows.append({
+                "date": date_str,
+                "co2": payload.get("CO2"),
+                "temp": payload.get("temperature"),
+                "humidity": payload.get("humidity"),
+            })
+
+        if not env_rows:
+            # SwitchBot データなし → sleep のみ返す
+            df_sleep = df_sleep.rename(columns={"sleep_score": "sleep_score"})
+            df_sleep["co2_avg"] = None
+            df_sleep["temp_avg"] = None
+            df_sleep["humidity_avg"] = None
+            df_sleep = df_sleep.sort_values("date").reset_index(drop=True)
+            return df_sleep
+
+        df_env = pd.DataFrame(env_rows)
+        # 日付ごとに平均を算出
+        df_env_agg = df_env.groupby("date").agg(
+            co2_avg=("co2", "mean"),
+            temp_avg=("temp", "mean"),
+            humidity_avg=("humidity", "mean"),
+        ).reset_index()
+        df_env_agg = df_env_agg.round(1)
+
+        # ── マージ (inner join: 両方にデータがある日のみ) ──
+        df = pd.merge(df_sleep, df_env_agg, on="date", how="left")
+        df = df.sort_values("date").reset_index(drop=True)
+        return df
+
     # ハッシュ計算時に除外する変動キー（API レスポンスに含まれる現在時刻等）
     _VOLATILE_KEYS = frozenset({
         "dt", "t", "time", "timestamp", "ts", "server_time",

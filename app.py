@@ -492,6 +492,103 @@ def main():
                 auth_url = google_oauth.get_authorization_url()
                 st.link_button("🔗 Google Fit にログイン", auth_url)
     
+    # ── 📊 Deep Analytics (Phase 2) ──
+    st.markdown("---")
+    st.subheader("📊 Deep Analytics")
+
+    analytics_days = st.select_slider(
+        "分析期間",
+        options=[7, 14, 30],
+        value=14,
+        format_func=lambda d: f"{d}日間",
+    )
+
+    try:
+        df_corr = db_manager.get_correlation_data(days=analytics_days)
+        if df_corr.empty or df_corr["sleep_score"].isna().all():
+            st.info("分析に必要なデータがまだありません。Oura の睡眠データが蓄積されると表示されます。")
+        else:
+            import plotly.graph_objects as go
+
+            fig = go.Figure()
+
+            # Y軸 (左): 睡眠スコア — 棒グラフ
+            fig.add_trace(go.Bar(
+                x=df_corr["date"],
+                y=df_corr["sleep_score"],
+                name="睡眠スコア",
+                marker_color="rgba(126,87,194,0.7)",
+                yaxis="y",
+            ))
+
+            # Y軸 (右): CO2 濃度 — 線グラフ
+            if df_corr["co2_avg"].notna().any():
+                fig.add_trace(go.Scatter(
+                    x=df_corr["date"],
+                    y=df_corr["co2_avg"],
+                    name="CO₂ (ppm)",
+                    mode="lines+markers",
+                    line=dict(color="#FF7043", width=2),
+                    marker=dict(size=5),
+                    yaxis="y2",
+                ))
+
+            fig.update_layout(
+                height=360,
+                margin=dict(l=0, r=0, t=30, b=0),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
+                yaxis=dict(
+                    title="睡眠スコア",
+                    range=[0, 100],
+                    side="left",
+                ),
+                yaxis2=dict(
+                    title="CO₂ (ppm)",
+                    overlaying="y",
+                    side="right",
+                    showgrid=False,
+                ),
+                xaxis=dict(title=""),
+                bargap=0.3,
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+
+            # サブチャート: 気温・湿度
+            has_temp = df_corr["temp_avg"].notna().any()
+            has_hum = df_corr["humidity_avg"].notna().any()
+            if has_temp or has_hum:
+                with st.expander("🌡️ 室温・湿度の推移", expanded=False):
+                    fig2 = go.Figure()
+                    if has_temp:
+                        fig2.add_trace(go.Scatter(
+                            x=df_corr["date"], y=df_corr["temp_avg"],
+                            name="室温 (℃)", mode="lines+markers",
+                            line=dict(color="#26A69A", width=2),
+                        ))
+                    if has_hum:
+                        fig2.add_trace(go.Scatter(
+                            x=df_corr["date"], y=df_corr["humidity_avg"],
+                            name="湿度 (%)", mode="lines+markers",
+                            line=dict(color="#42A5F5", width=2),
+                            yaxis="y2",
+                        ))
+                    fig2.update_layout(
+                        height=280,
+                        margin=dict(l=0, r=0, t=10, b=0),
+                        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
+                        yaxis=dict(title="室温 (℃)", side="left"),
+                        yaxis2=dict(title="湿度 (%)", overlaying="y", side="right", showgrid=False),
+                    )
+                    st.plotly_chart(fig2, use_container_width=True)
+
+            # データテーブル
+            with st.expander("📋 データテーブル", expanded=False):
+                st.dataframe(df_corr, use_container_width=True, hide_index=True)
+    except Exception as e:
+        logger.warning(f"Deep Analytics error: {e}")
+        st.caption("📊 分析データの取得中にエラーが発生しました。")
+
     # 設定（サイドバー - 折りたたみ）
     with st.sidebar:
         st.header("⚙️ 設定")
