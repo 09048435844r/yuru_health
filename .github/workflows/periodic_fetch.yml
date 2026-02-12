@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]  # push で cron スケジューラを再登録させる
   schedule:
-    # 実行確率向上のため、スケジュールを個別に定義 (Split strategy)
+    # 15分間隔 — 各行が独立トリガーとなり確実に4回/時実行される
     - cron: "3 * * * *"
     - cron: "18 * * * *"
     - cron: "33 * * * *"
