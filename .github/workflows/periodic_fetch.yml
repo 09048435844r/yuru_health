@@ -4,8 +4,11 @@ on:
   push:
     branches: [main]  # push で cron スケジューラを再登録させる
   schedule:
-    # 毎時 3, 18, 33, 48 分に実行 (UTC) — ラウンド数を避けて遅延を軽減
-    - cron: "3,18,33,48 * * * *"
+    # 実行確率向上のため、スケジュールを個別に定義 (Split strategy)
+    - cron: "3 * * * *"
+    - cron: "18 * * * *"
+    - cron: "33 * * * *"
+    - cron: "48 * * * *"
   workflow_dispatch: # 手動実行も可能
 
 jobs:
