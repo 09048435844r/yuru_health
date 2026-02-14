@@ -51,13 +51,16 @@ def load_gemini_settings():
     import os
     model_from_env = os.getenv("GEMINI_MODEL_NAME")
     if model_from_env:
-        return {"model_name": model_from_env}
+        return {"model_name": model_from_env, "available_models": [model_from_env]}
     try:
         with open("config/settings.yaml", "r", encoding="utf-8") as f:
             settings = yaml.safe_load(f)
-            return settings.get("gemini", {})
+            gemini = settings.get("gemini", {})
+            if "available_models" not in gemini:
+                gemini["available_models"] = [gemini.get("model_name", "gemini-2.0-flash")]
+            return gemini
     except FileNotFoundError:
-        return {}
+        return {"model_name": "gemini-2.0-flash", "available_models": ["gemini-2.0-flash"]}
 
 
 @st.cache_resource
@@ -348,10 +351,17 @@ def main():
     st.markdown("---")
     
     # ── AI Deep Insight (生データ分析) ──
-    model_name = gemini_settings.get("model_name", "gemini-1.5-flash")
-    evaluator = get_gemini_evaluator(model_name)
+    default_model = gemini_settings.get("model_name", "gemini-2.0-flash")
+    available_models = gemini_settings.get("available_models", [default_model])
+    evaluator = get_gemini_evaluator(default_model)
     
     if evaluator.is_available():
+        selected_model = st.radio(
+            "🤖 使用モデル",
+            options=available_models,
+            index=0,
+            horizontal=True,
+        )
         if st.button("🔍 AI Deep Insight (生データ分析)", use_container_width=True):
             yesterday = (datetime.now(JST) - timedelta(days=1)).strftime("%Y-%m-%d")
             with st.spinner("生データを取得中..."):
@@ -359,10 +369,10 @@ def main():
             if not raw_data:
                 st.warning(f"⚠️ {yesterday} の生データがありません。🔄ボタンでデータを更新してください。")
             else:
-                with st.spinner("🔍 Deep Insight 分析中..."):
-                    insight = evaluator.deep_analyze(raw_data)
+                with st.spinner(f"🔍 Deep Insight 分析中 ({selected_model})..."):
+                    insight = evaluator.deep_analyze(raw_data, target_model=selected_model)
                 st.success(insight.split("\n")[0] if insight else "分析結果なし")
-                with st.expander("� 詳細分析を見る", expanded=False):
+                with st.expander("📋 詳細分析を見る", expanded=False):
                     st.markdown(insight)
     
     st.markdown("---")
@@ -618,7 +628,7 @@ def main():
         with st.expander("ℹ️ システム情報", expanded=False):
             st.info(f"**環境:** {db_manager.env}")
             st.info(f"**DB:** {db_manager.db_config['type']}")
-            st.caption(f"Model: {gemini_settings.get('model_name', 'N/A')}")
+            st.caption(f"Model: {gemini_settings.get('model_name', 'N/A')} (選択可能: {', '.join(gemini_settings.get('available_models', []))})")
         
         if st.checkbox("🗄️ Raw Data View", value=False):
             raw_rows = db_manager.get_raw_data_recent(limit=100)

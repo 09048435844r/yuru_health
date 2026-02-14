@@ -173,13 +173,15 @@ class GeminiEvaluator(BaseEvaluator):
         values = [item.get(key, 0) for item in data if item.get(key) is not None]
         return sum(values) / len(values) if values else 0
     
-    def deep_analyze(self, raw_data_dict: Dict[str, List[Dict[str, Any]]]) -> str:
+    def deep_analyze(self, raw_data_dict: Dict[str, List[Dict[str, Any]]],
+                     target_model: Optional[str] = None) -> str:
         """
         Data Lake の生データをクロス分析する Deep Insight 機能
         
         Args:
             raw_data_dict: source をキーとした生データ辞書
                            例: {'oura': [...], 'withings': [...], 'weather': [...]}
+            target_model: 使用する Gemini モデル名。None の場合はデフォルトモデルを使用。
         
         Returns:
             str: AI による深層分析テキスト
@@ -189,6 +191,14 @@ class GeminiEvaluator(BaseEvaluator):
         
         if not raw_data_dict:
             return "⚠️ 分析対象の生データがありません。まず🔄ボタンでデータを更新してください。"
+        
+        # target_model が指定されていればそのモデルを使用、なければデフォルト
+        model = self.model
+        if target_model and target_model != self.model_name:
+            try:
+                model = genai.GenerativeModel(target_model)
+            except Exception:
+                model = self.model
         
         profile = self._load_user_profile()
 
@@ -218,7 +228,7 @@ class GeminiEvaluator(BaseEvaluator):
 口調はフランクで親しみやすく、励ますようにしてください。"""
         
         try:
-            response = self.model.generate_content(prompt)
+            response = model.generate_content(prompt)
             return response.text
         except Exception as e:
             return f"❌ Deep Insight 分析中にエラーが発生しました: {str(e)}"
