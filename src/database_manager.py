@@ -60,6 +60,14 @@ class DatabaseManager:
         pass
     
     def insert_weight_data(self, user_id: str, measured_at: str, weight_kg: float, raw_data: str):
+        existing = (
+            self.supabase.table("weight_data")
+            .select("id").eq("user_id", user_id).eq("measured_at", measured_at)
+            .limit(1).execute()
+        )
+        if existing.data:
+            logger.info(f"Skipped duplicate for weight_data: {measured_at}")
+            return
         data = {
             "user_id": user_id,
             "measured_at": measured_at,
@@ -78,6 +86,14 @@ class DatabaseManager:
     def insert_oura_data(self, user_id: str, measured_at: str, activity_score: Optional[int], 
                         sleep_score: Optional[int], readiness_score: Optional[int], 
                         steps: Optional[int], total_sleep_duration: Optional[int], raw_data: str):
+        existing = (
+            self.supabase.table("oura_data")
+            .select("id").eq("user_id", user_id).eq("measured_at", measured_at)
+            .limit(1).execute()
+        )
+        if existing.data:
+            logger.info(f"Skipped duplicate for oura_data: {measured_at}")
+            return
         data = {
             "user_id": user_id,
             "measured_at": measured_at,
@@ -102,6 +118,14 @@ class DatabaseManager:
                                   weather_summary: Optional[str], temp: Optional[float],
                                   humidity: Optional[int], pressure: Optional[int],
                                   raw_data: Optional[str]):
+        existing = (
+            self.supabase.table("environmental_logs")
+            .select("id").eq("timestamp", timestamp).eq("source", source)
+            .limit(1).execute()
+        )
+        if existing.data:
+            logger.info(f"Skipped duplicate for environmental_logs: {timestamp} ({source})")
+            return
         data = {
             "timestamp": timestamp,
             "source": source,
@@ -127,6 +151,14 @@ class DatabaseManager:
     
     def insert_google_fit_data(self, user_id: str, date: str, data_type: str,
                                value: Any, raw_data: Any):
+        existing = (
+            self.supabase.table("google_fit_data")
+            .select("id").eq("user_id", user_id).eq("date", date).eq("data_type", data_type)
+            .limit(1).execute()
+        )
+        if existing.data:
+            logger.info(f"Skipped duplicate for google_fit_data: {date} ({data_type})")
+            return
         data = {
             "user_id": user_id,
             "date": date,
