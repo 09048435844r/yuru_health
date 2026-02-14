@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 JST = timezone(timedelta(hours=9))
 
 logger = logging.getLogger(__name__)
-from src.database_manager import DatabaseManager
+from src.database_manager import DatabaseManager, _to_jst_date
 from src.fetchers.withings_fetcher import WithingsFetcher
 from src.fetchers.oura_fetcher import OuraFetcher
 from src.fetchers.weather_fetcher import WeatherFetcher
@@ -236,6 +236,29 @@ def main():
     
     db_manager = get_database_manager()
     db_manager.init_tables()
+
+    # ── 🛠 一時診断コード（問題解決後に削除） ──
+    st.error("🛠 デバッグモード起動中")
+    _diag_now = datetime.now(JST)
+    st.code(f"Server JST now : {_diag_now.isoformat()}\nJST today      : {_diag_now.strftime('%Y-%m-%d')}")
+    try:
+        _diag_rows = db_manager.get_raw_data_recent(limit=5)
+        for i, r in enumerate(_diag_rows):
+            raw_fa = r.get("fetched_at", "(missing)")
+            try:
+                converted = _to_jst_date(raw_fa)
+            except Exception as exc:
+                converted = f"ERROR: {exc}"
+            st.code(
+                f"[{i}] source={r.get('source')}  category={r.get('category')}\n"
+                f"    fetched_at (raw) : {raw_fa}\n"
+                f"    _to_jst_date()   : {converted}"
+            )
+    except Exception as exc:
+        st.code(f"get_raw_data_recent failed: {exc}")
+    st.markdown("---")
+    # ── 🛠 診断コードここまで ──
+
     gemini_settings = load_gemini_settings()
     
     # Withings OAuth コールバック処理
