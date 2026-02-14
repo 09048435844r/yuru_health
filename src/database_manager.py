@@ -148,12 +148,12 @@ class DatabaseManager:
     
     def get_data_arrival_history(self, days: int = 14) -> List[Dict[str, Any]]:
         """過去N日間の (source, fetched_date) リストを raw_data_lake から取得"""
-        start_date = (_now_jst() - timedelta(days=days)).isoformat()
+        start_date = (_now_jst() - timedelta(days=days + 1)).isoformat()
         response = (
             self.supabase.table("raw_data_lake")
             .select("source, fetched_at")
             .gte("fetched_at", start_date)
-            .order("fetched_at", desc=True)
+            .order("fetched_at")
             .limit(10000)
             .execute()
         )
@@ -185,12 +185,12 @@ class DatabaseManager:
               ...
             }
         """
-        start_date = (_now_jst() - timedelta(days=days)).isoformat()
+        start_date = (_now_jst() - timedelta(days=days + 1)).isoformat()
         response = (
             self.supabase.table("raw_data_lake")
             .select("source, category, fetched_at, payload")
             .gte("fetched_at", start_date)
-            .order("fetched_at", desc=True)
+            .order("fetched_at")
             .limit(10000)
             .execute()
         )
