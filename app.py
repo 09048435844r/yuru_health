@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 JST = timezone(timedelta(hours=9))
 
 logger = logging.getLogger(__name__)
-from src.database_manager import DatabaseManager, _to_jst_date
+from src.database_manager import DatabaseManager
 from src.fetchers.withings_fetcher import WithingsFetcher
 from src.fetchers.oura_fetcher import OuraFetcher
 from src.fetchers.weather_fetcher import WeatherFetcher
@@ -237,40 +237,6 @@ def main():
     db_manager = get_database_manager()
     db_manager.init_tables()
 
-    # ── 🛠 一時診断コード（問題解決後に削除） ──
-    st.error("🛠 デバッグモード起動中")
-    _diag_now = datetime.now(JST)
-    st.code(f"Server JST now : {_diag_now.isoformat()}\nJST today      : {_diag_now.strftime('%Y-%m-%d')}")
-    try:
-        _diag_rich = db_manager.get_data_arrival_rich(days=3)
-        st.code(f"get_data_arrival_rich(days=3) → {len(_diag_rich)} keys")
-        for k, v in sorted(_diag_rich.items()):
-            has = v.get("has_data")
-            badge = v.get("badge", {})
-            ts_len = len(v.get("timeseries", []))
-            st.code(f"  {k}  has_data={has}  badge={badge}  timeseries_len={ts_len}")
-        # 足跡テーブルの日付列を確認
-        from src.utils.sparkline import _SOURCE_LABELS
-        import datetime as _dt
-        _JST_tz = _dt.timezone(_dt.timedelta(hours=9))
-        _today = _dt.datetime.now(_JST_tz).date()
-        _dates = [(_today - _dt.timedelta(days=i)).strftime("%Y-%m-%d") for i in range(2, -1, -1)]
-        st.code(f"Footprint date columns (last 3): {_dates}")
-        st.code(f"Source keys in table: {list(_SOURCE_LABELS.keys())}")
-        _missing = []
-        for src in _SOURCE_LABELS:
-            for d in _dates:
-                if (src, d) not in _diag_rich:
-                    _missing.append(f"({src}, {d})")
-        if _missing:
-            st.code(f"Missing keys (no data): {', '.join(_missing[:15])}")
-        else:
-            st.code("All source×date keys have data ✅")
-    except Exception as exc:
-        import traceback
-        st.code(f"Diagnostic error:\n{traceback.format_exc()}")
-    st.markdown("---")
-    # ── 🛠 診断コードここまで ──
 
     gemini_settings = load_gemini_settings()
     

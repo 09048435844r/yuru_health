@@ -153,6 +153,8 @@ class DatabaseManager:
             self.supabase.table("raw_data_lake")
             .select("source, fetched_at")
             .gte("fetched_at", start_date)
+            .order("fetched_at", desc=True)
+            .limit(10000)
             .execute()
         )
         # fetched_at (TIMESTAMPTZ / UTC) を JST 日付に変換して返す
@@ -188,7 +190,8 @@ class DatabaseManager:
             self.supabase.table("raw_data_lake")
             .select("source, category, fetched_at, payload")
             .gte("fetched_at", start_date)
-            .order("fetched_at")
+            .order("fetched_at", desc=True)
+            .limit(10000)
             .execute()
         )
 
