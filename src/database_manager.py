@@ -154,7 +154,7 @@ class DatabaseManager:
             .select("source, fetched_at")
             .gte("fetched_at", start_date)
             .order("fetched_at")
-            .limit(10000)
+            .limit(50000)
             .execute()
         )
         # fetched_at (TIMESTAMPTZ / UTC) を JST 日付に変換して返す
@@ -191,7 +191,7 @@ class DatabaseManager:
             .select("source, category, fetched_at, payload")
             .gte("fetched_at", start_date)
             .order("fetched_at")
-            .limit(10000)
+            .limit(50000)
             .execute()
         )
 
