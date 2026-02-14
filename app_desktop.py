@@ -1,11 +1,11 @@
 import streamlit as st
 import pandas as pd
-import yaml
 from datetime import datetime, timedelta
 from src.database_manager import DatabaseManager
 from src.fetchers.withings_fetcher import WithingsFetcher
 from src.fetchers.oura_fetcher import OuraFetcher
 from auth.withings_oauth import WithingsOAuth
+from src.utils.config_loader import load_settings
 
 
 st.set_page_config(
@@ -27,8 +27,7 @@ def get_withings_oauth(_db_manager):
 
 @st.cache_resource
 def get_withings_config():
-    with open("config/settings.yaml", "r", encoding="utf-8") as f:
-        config = yaml.safe_load(f)
+    config = load_settings()
     return config.get("withings", {})
 
 

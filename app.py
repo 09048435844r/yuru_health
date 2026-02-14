@@ -1,7 +1,6 @@
 import logging
 import streamlit as st
 import pandas as pd
-import yaml
 from datetime import datetime, timedelta, timezone
 
 JST = timezone(timedelta(hours=9))
@@ -17,6 +16,7 @@ from src.evaluators.gemini_evaluator import GeminiEvaluator
 from auth.google_oauth import GoogleOAuth
 from src.fetchers.google_fit_fetcher import GoogleFitFetcher
 from src.utils.sparkline import build_footprint_html
+from src.utils.config_loader import load_settings
 
 try:
     from streamlit_js_eval import get_geolocation
@@ -48,19 +48,11 @@ def get_withings_oauth(db_manager):
 
 @st.cache_resource
 def load_gemini_settings():
-    import os
-    model_from_env = os.getenv("GEMINI_MODEL_NAME")
-    if model_from_env:
-        return {"model_name": model_from_env, "available_models": [model_from_env]}
-    try:
-        with open("config/settings.yaml", "r", encoding="utf-8") as f:
-            settings = yaml.safe_load(f)
-            gemini = settings.get("gemini", {})
-            if "available_models" not in gemini:
-                gemini["available_models"] = [gemini.get("model_name", "gemini-2.0-flash")]
-            return gemini
-    except FileNotFoundError:
-        return {"model_name": "gemini-2.0-flash", "available_models": ["gemini-2.0-flash"]}
+    settings = load_settings()
+    gemini = settings.get("gemini", {})
+    if "available_models" not in gemini:
+        gemini["available_models"] = [gemini.get("model_name", "gemini-2.0-flash")]
+    return gemini
 
 
 @st.cache_resource
@@ -110,8 +102,7 @@ def refresh_data(db_manager: DatabaseManager, user_id: str = "user_001"):
             if withings_oauth.is_authenticated():
                 logger.info("Withings: authenticated, fetching data...")
                 try:
-                    with open("config/settings.yaml", "r", encoding="utf-8") as f:
-                        config = yaml.safe_load(f)
+                    config = load_settings()
                     fetcher = WithingsFetcher(config, withings_oauth, db_manager=db_manager)
                     data = fetcher.fetch_data(user_id, start_str, end_str)
                     
@@ -131,8 +122,7 @@ def refresh_data(db_manager: DatabaseManager, user_id: str = "user_001"):
             
             # Ouraデータ取得
             try:
-                with open("config/settings.yaml", "r", encoding="utf-8") as f:
-                    config = yaml.safe_load(f)
+                config = load_settings()
                 fetcher = OuraFetcher(config, db_manager=db_manager)
                 logger.info(f"Oura: db_manager passed = {db_manager is not None}")
                 if fetcher.authenticate():

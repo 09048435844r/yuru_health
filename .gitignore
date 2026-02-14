@@ -30,7 +30,6 @@ wheels/
 data/
 
 # Config with secrets
-config/settings.yaml
 config/secrets.yaml
 config/token_*.json
 
