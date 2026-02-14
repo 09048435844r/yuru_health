@@ -7,7 +7,11 @@ env: "local"
 # Gemini AI モデル設定
 # 環境変数: GEMINI_MODEL_NAME
 gemini:
-  model_name: "gemini-1.5-flash"
+  model_name: "gemini-2.0-flash"
+  # UIで選択可能なモデルリスト
+  available_models:
+    - "gemini-2.0-flash"
+    - "gemini-2.0-pro-exp-02-05"
 
 # データベース設定 (現在は Supabase のみ使用)
 database:
