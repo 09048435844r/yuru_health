@@ -192,7 +192,8 @@ def build_footprint_html(
     Returns:
         (html_string, total_cells, filled_cells)
     """
-    today = _dt.date.today()
+    _JST = _dt.timezone(_dt.timedelta(hours=9))
+    today = _dt.datetime.now(_JST).date()
     date_range = [(today - _dt.timedelta(days=i)) for i in range(days - 1, -1, -1)]
 
     total_cells = 0

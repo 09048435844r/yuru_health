@@ -17,6 +17,24 @@ def _now_jst() -> datetime:
     return datetime.now(JST)
 
 
+def _to_jst(iso_str: str) -> datetime:
+    """ISO 文字列 (UTC / aware) を JST の aware datetime に変換する"""
+    dt = datetime.fromisoformat(iso_str)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(JST)
+
+
+def _to_jst_date(iso_str: str) -> str:
+    """ISO 文字列から JST の日付文字列 (YYYY-MM-DD) を返す"""
+    return _to_jst(iso_str).strftime("%Y-%m-%d")
+
+
+def _to_jst_hour(iso_str: str) -> int:
+    """ISO 文字列から JST の時 (0-23) を返す"""
+    return _to_jst(iso_str).hour
+
+
 class DatabaseManager:
     def __init__(self, secrets_path: str = "config/secrets.yaml"):
         self.secrets = load_secrets(secrets_path)
@@ -137,11 +155,11 @@ class DatabaseManager:
             .gte("fetched_at", start_date)
             .execute()
         )
-        # fetched_at (timestamp) を日付文字列に変換して返す
+        # fetched_at (TIMESTAMPTZ / UTC) を JST 日付に変換して返す
         results = []
         seen = set()
         for row in response.data:
-            fetched_date = row["fetched_at"][:10]  # "2026-02-11T..." -> "2026-02-11"
+            fetched_date = _to_jst_date(row["fetched_at"])
             key = (row["source"], fetched_date)
             if key not in seen:
                 seen.add(key)
@@ -174,10 +192,10 @@ class DatabaseManager:
             .execute()
         )
 
-        # source×date ごとにレコードを集約
+        # source×date ごとにレコードを集約 (fetched_at を JST 日付に変換)
         buckets: Dict[tuple, list] = {}
         for row in response.data:
-            fetched_date = row["fetched_at"][:10]
+            fetched_date = _to_jst_date(row["fetched_at"])
             key = (row["source"], fetched_date)
             buckets.setdefault(key, []).append(row)
 
@@ -206,8 +224,7 @@ class DatabaseManager:
             payload = row.get("payload", {})
             if not isinstance(payload, dict):
                 continue
-            hour_str = row.get("fetched_at", "")[11:13]
-            hour = int(hour_str) if hour_str.isdigit() else 0
+            hour = _to_jst_hour(row.get("fetched_at", "1970-01-01T00:00:00+00:00"))
 
             if source == "switchbot":
                 timeseries.append({
@@ -393,7 +410,7 @@ class DatabaseManager:
             payload = row.get("payload", {})
             if not isinstance(payload, dict):
                 continue
-            date_str = row.get("fetched_at", "")[:10]
+            date_str = _to_jst_date(row.get("fetched_at", "1970-01-01T00:00:00+00:00"))
             if len(date_str) < 10:
                 continue
             env_rows.append({
