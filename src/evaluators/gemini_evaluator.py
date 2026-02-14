@@ -1,5 +1,6 @@
 import json
 import yaml
+import streamlit as st
 from typing import Dict, Any, Optional, List
 from pathlib import Path
 from src.evaluators.base_evaluator import BaseEvaluator
@@ -72,6 +73,21 @@ class GeminiEvaluator(BaseEvaluator):
             except Exception:
                 pass
     
+    @staticmethod
+    def _load_user_profile() -> Dict[str, str]:
+        """ユーザープロフィールを st.secrets から読み込む"""
+        try:
+            profile = st.secrets.get("user_profile", {})
+        except Exception:
+            profile = {}
+        return {
+            "age": profile.get("age", "不明"),
+            "gender": profile.get("gender", "不明"),
+            "location": profile.get("location", "不明"),
+            "concerns": profile.get("concerns", "特になし"),
+            "goals": profile.get("goals", "健康維持"),
+        }
+
     def is_available(self) -> bool:
         """評価機能が利用可能か確認"""
         return GENAI_AVAILABLE and self.model is not None and self.api_key is not None
@@ -173,6 +189,8 @@ class GeminiEvaluator(BaseEvaluator):
         if not raw_data_dict:
             return "⚠️ 分析対象の生データがありません。まず🔄ボタンでデータを更新してください。"
         
+        profile = self._load_user_profile()
+
         data_sections = []
         for source, records in raw_data_dict.items():
             payloads = [r.get("payload", {}) for r in records]
@@ -180,28 +198,22 @@ class GeminiEvaluator(BaseEvaluator):
         
         raw_data_text = "\n\n".join(data_sections)
         
-        prompt = f"""あなたは47歳男性向けの「ゆるストイック」な健康メンターです。
-厳しすぎず、でもデータに基づいた的確なアドバイスをする専門家として振る舞ってください。
+        prompt = f"""あなたは、以下のユーザーの専属ヘルスコーチです。
 
-以下は、各ヘルスケアデバイス・APIから取得した **生の JSON データ** です。
-通常の集計値では見えない、生データにしかない詳細情報を深掘りして分析してください。
+【ユーザー情報】
+- 年齢: {profile['age']}
+- 性別: {profile['gender']}
+- 居住地: {profile['location']}
+- 現在の悩み: {profile['concerns']}
+- 目標: {profile['goals']}
 
+【直近の健康データ】
 {raw_data_text}
 
-## 分析指示
-1. **睡眠の質の深掘り** (Oura): sleep の contributors（深い睡眠、REM、入眠時間、中途覚醒など）を詳しく分析
-2. **活動と回復のバランス** (Oura): activity と readiness の関係性、回復が追いついているか
-3. **環境要因との相関** (Weather): 気温・気圧・湿度が睡眠や体調に影響していないか
-4. **体重トレンド** (Withings): 測定値の変動パターン、時間帯による差
-5. **クロス分析**: 上記を横断的に見て、見落としがちなパターンや改善ポイント
-
-## 出力フォーマット
-- 📊 **データハイライト**: 特に注目すべき数値を3つ
-- 🔍 **深層インサイト**: 生データからしか読み取れない発見を2〜3つ
-- 💡 **ゆるストイック・アドバイス**: 具体的で実行しやすい提案を2つ
-- 🎯 **今日のフォーカス**: 今日特に意識すべきこと1つ
-
-日本語で、親しみやすく、でもデータに忠実に回答してください。"""
+【依頼】
+上記のデータを分析し、ユーザーの悩みや目標に寄り添った、具体的かつ実践的なアドバイスを3点提示してください。
+データに基づいた「気づき」と、無理なくできる「小さなアクション」を提案してください。
+口調はフランクで親しみやすく、励ますようにしてください。"""
         
         try:
             response = self.model.generate_content(prompt)
