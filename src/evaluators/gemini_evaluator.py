@@ -173,14 +173,14 @@ class GeminiEvaluator(BaseEvaluator):
         values = [item.get(key, 0) for item in data if item.get(key) is not None]
         return sum(values) / len(values) if values else 0
     
-    def deep_analyze(self, raw_data_dict: Dict[str, List[Dict[str, Any]]],
-                     target_model: Optional[str] = None) -> str:
+    def deep_analyze(self, raw_data_dict: Optional[Dict[str, List[Dict[str, Any]]]] = None,
+                     target_model: Optional[str] = None, **kwargs) -> str:
         """
         Data Lake の生データをクロス分析する Deep Insight 機能
         
         Args:
             raw_data_dict: source をキーとした生データ辞書
-                           例: {'oura': [...], 'withings': [...], 'weather': [...]}
+                           例: {'oura': [...], 'withings': [...], 'weather': [...]} 
             target_model: 使用する Gemini モデル名。None の場合はデフォルトモデルを使用。
         
         Returns:
@@ -188,6 +188,10 @@ class GeminiEvaluator(BaseEvaluator):
         """
         if not self.is_available():
             return "⚠️ Gemini APIが利用できません。APIキーを設定してください。"
+
+        # 呼び出し側互換: raw_data キーで渡された場合も受け付ける
+        if raw_data_dict is None and isinstance(kwargs.get("raw_data"), dict):
+            raw_data_dict = kwargs.get("raw_data")
         
         if not raw_data_dict:
             return "⚠️ 分析対象の生データがありません。まず🔄ボタンでデータを更新してください。"
