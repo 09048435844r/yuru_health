@@ -513,15 +513,15 @@ class DatabaseManager:
         
         制約: unique_raw_data_v2 (user_id, fetched_at, source, category)
         ロジック:
-          1. 同一 source/category の最新レコードの payload ハッシュと比較
-          2. 中身が同じ → スキップ（重複防止）
+          1. 同一 source/category の最新50件の payload ハッシュと比較
+          2. 中身が同じものが1つでもあれば → スキップ（重複防止）
           3. 中身が異なる → 新規 INSERT（fetched_at = now）
         """
         try:
             new_payload = payload if isinstance(payload, dict) else self._parse_raw_data(payload)
             new_hash = self._payload_hash(new_payload)
             
-            # 同一 source/category の最新レコードを取得
+            # 同一 source/category の最新50件を取得
             existing = (
                 self.supabase.table("raw_data_lake")
                 .select("id, payload")
@@ -529,13 +529,16 @@ class DatabaseManager:
                 .eq("source", source)
                 .eq("category", category)
                 .order("fetched_at", desc=True)
-                .limit(1)
+                .limit(50)
                 .execute()
             )
             
             if existing.data:
-                old_hash = self._payload_hash(existing.data[0].get("payload", {}))
-                if new_hash == old_hash:
+                existing_hashes = {
+                    self._payload_hash(row.get("payload", {}))
+                    for row in existing.data
+                }
+                if new_hash in existing_hashes:
                     logger.info(f"Skipped duplicate for {source}/{category}")
                     return
             
