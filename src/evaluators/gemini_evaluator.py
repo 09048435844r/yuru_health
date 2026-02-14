@@ -84,6 +84,7 @@ class GeminiEvaluator(BaseEvaluator):
             "age": profile.get("age", "不明"),
             "gender": profile.get("gender", "不明"),
             "location": profile.get("location", "不明"),
+            "occupation": profile.get("occupation", "不明"),
             "concerns": profile.get("concerns", "特になし"),
             "goals": profile.get("goals", "健康維持"),
         }
@@ -204,6 +205,7 @@ class GeminiEvaluator(BaseEvaluator):
 - 年齢: {profile['age']}
 - 性別: {profile['gender']}
 - 居住地: {profile['location']}
+- 職業: {profile['occupation']}
 - 現在の悩み: {profile['concerns']}
 - 目標: {profile['goals']}
 
