@@ -244,6 +244,27 @@ CREATE TABLE raw_data_lake (
 -- (スキーマは src/database_manager.py の insert メソッドを参照)
 ```
 
+## 🧪 開発・テスト (Development & Testing)
+
+### 手動テストの実行
+
+```bash
+pytest
+```
+
+ローカルでの開発時は、実装変更後に `pytest` を実行して回帰がないことを確認してください。
+
+### 自動テストの仕様（pre-commit hook）
+
+- Git の `pre-commit` フック（`.git/hooks/pre-commit`）で、`git commit` 時に自動で `pytest` を実行します。
+- テストが失敗した場合は `exit 1` でコミットを中止します。
+- テストが成功した場合のみ、そのままコミットが続行されます。
+
+### 現在のテスト範囲
+
+- 現在は `ffmpeg_renderer.py` のパス処理など、基盤ロジックの単体テストを中心に検証しています。
+- 今後、Fetcher / Evaluator / DatabaseManager 周辺テストを段階的に拡張予定です。
+
 ## 🔌 拡張方法
 
 `src/base_fetcher.py` を継承して新しいデータソースを追加できます:

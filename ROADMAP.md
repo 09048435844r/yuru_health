@@ -25,6 +25,12 @@
 - Google Cloud Project 設定、OAuth2 認証
 - Google Fit Fetcher 実装 (歩数・睡眠・体重)
 - Samsung Health → Health Connect → Google Fit → YuruHealth パイプライン
+- 単体テスト環境の構築 (`pytest`)
+- CI/CD基礎（`pre-commit` hook による commit 前自動テスト）
+
+## 🚀 Next Priority (最優先)
+- **YouTube Data API 自動アップロードの実装**
+- 目標: データ可視化・レポートの定期動画化/配信フローを自動化する
 
 ## 🎵 Phase 4: Context Awareness (Music & Life)
 - **目的**: 音楽と健康データの相関分析。
