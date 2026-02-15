@@ -377,6 +377,51 @@ class DatabaseManager:
             source = row.get("source", "unknown")
             result.setdefault(source, []).append(row)
         return result
+
+    def save_daily_insight(self, target_date: str, content: str, model_name: str,
+                           user_id: Optional[str] = "user_001"):
+        """daily_insights に分析結果を履歴として INSERT 保存する（上書きしない）。"""
+        base_data = {
+            "date": target_date,
+            "content": content,
+            "model_name": model_name,
+            "created_at": _now_jst().isoformat(),
+        }
+
+        # user_id カラム有無の互換を考慮（無い環境では user_id なしで保存）
+        if user_id:
+            try:
+                self.supabase.table("daily_insights").insert({**base_data, "user_id": user_id}).execute()
+                return
+            except Exception as e:
+                logger.info(f"save_daily_insight retry without user_id: {e}")
+
+        self.supabase.table("daily_insights").insert(base_data).execute()
+
+    def get_daily_insight_history(self, target_date: str, user_id: Optional[str] = "user_001",
+                                  limit: int = 20) -> List[Dict[str, Any]]:
+        """指定日の分析履歴を created_at 降順で返す。"""
+        query = (
+            self.supabase.table("daily_insights")
+            .select("id, date, content, model_name, created_at")
+            .eq("date", target_date)
+            .order("created_at", desc=True)
+            .limit(limit)
+        )
+
+        if user_id:
+            try:
+                return query.eq("user_id", user_id).execute().data
+            except Exception:
+                pass
+
+        return query.execute().data
+
+    def get_latest_daily_insight(self, target_date: str,
+                                 user_id: Optional[str] = "user_001") -> Optional[Dict[str, Any]]:
+        """指定日の最新分析結果（created_at が最も新しい1件）を返す。"""
+        rows = self.get_daily_insight_history(target_date=target_date, user_id=user_id, limit=1)
+        return rows[0] if rows else None
     
     # ── Phase 2: 相関分析用データ取得 ──
 

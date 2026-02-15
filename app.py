@@ -405,26 +405,87 @@ def main():
     with tab_summary:
         if "deep_insight" not in st.session_state:
             st.session_state.deep_insight = ""
+        if "deep_insight_date" not in st.session_state:
+            st.session_state.deep_insight_date = ""
+        if "deep_insight_model" not in st.session_state:
+            st.session_state.deep_insight_model = ""
+        if "deep_insight_created_at" not in st.session_state:
+            st.session_state.deep_insight_created_at = ""
 
         evaluator = get_gemini_evaluator(default_model)
         insight_container = st.container()
+        target_date = insight_date.strftime("%Y-%m-%d")
+        user_id = "user_001"
+
+        insight_history = db_manager.get_daily_insight_history(target_date=target_date, user_id=user_id, limit=20)
+        latest_db_insight = insight_history[0] if insight_history else None
+
+        # 日付変更時は DB の最新結果を基準に表示を同期
+        if st.session_state.deep_insight_date != target_date:
+            if latest_db_insight:
+                st.session_state.deep_insight = latest_db_insight.get("content", "")
+                st.session_state.deep_insight_model = latest_db_insight.get("model_name", "")
+                st.session_state.deep_insight_created_at = latest_db_insight.get("created_at", "")
+            else:
+                st.session_state.deep_insight = ""
+                st.session_state.deep_insight_model = ""
+                st.session_state.deep_insight_created_at = ""
+            st.session_state.deep_insight_date = target_date
+
+        def _run_deep_insight_analysis():
+            with st.spinner("Geminiが昨日のデータを読み解いています..."):
+                raw_data = db_manager.get_raw_data_by_date(target_date)
+                if not raw_data:
+                    st.warning(f"⚠️ {target_date} の生データがありません。🔄ボタンでデータを更新してください。")
+                    return
+
+                insight = evaluator.deep_analyze(raw_data, target_model=selected_model)
+                db_manager.save_daily_insight(
+                    target_date=target_date,
+                    content=insight,
+                    model_name=selected_model,
+                    user_id=user_id,
+                )
+                st.session_state.deep_insight = insight
+                st.session_state.deep_insight_model = selected_model
+                st.session_state.deep_insight_created_at = datetime.now(JST).isoformat()
+                st.session_state.deep_insight_date = target_date
+                st.rerun()
 
         if evaluator.is_available():
-            if st.button("🔍 Gemini 分析（Deep Insight） / 再分析", use_container_width=True):
-                target_date = insight_date.strftime("%Y-%m-%d")
-                with st.spinner("Geminiが昨日のデータを読み解いています..."):
-                    raw_data = db_manager.get_raw_data_by_date(target_date)
-                    if not raw_data:
-                        st.session_state.deep_insight = ""
-                        st.warning(f"⚠️ {target_date} の生データがありません。🔄ボタンでデータを更新してください。")
-                    else:
-                        st.session_state.deep_insight = evaluator.deep_analyze(raw_data, target_model=selected_model)
+            if latest_db_insight:
+                label = f"既存の分析が{len(insight_history)}件あります。{selected_model} でやり直しますか？"
+                with st.popover(label, use_container_width=True):
+                    st.caption(f"対象日: {target_date}")
+                    st.warning("再分析を実行すると、新しい結果が履歴に追加されます。")
+                    if st.button("✅ はい、再分析する", key=f"reanalyze_{target_date}", use_container_width=True):
+                        _run_deep_insight_analysis()
+            else:
+                if st.button("🔍 Gemini 分析（Deep Insight）", use_container_width=True):
+                    _run_deep_insight_analysis()
 
         with insight_container:
             if st.session_state.deep_insight:
                 st.success(st.session_state.deep_insight.split("\n")[0])
                 with st.expander("📋 詳細分析を見る", expanded=False):
                     st.markdown(st.session_state.deep_insight)
+
+                if st.session_state.deep_insight_model or st.session_state.deep_insight_created_at:
+                    meta_parts = []
+                    if st.session_state.deep_insight_model:
+                        meta_parts.append(f"model: {st.session_state.deep_insight_model}")
+                    if st.session_state.deep_insight_created_at:
+                        meta_parts.append(f"created: {st.session_state.deep_insight_created_at[:16].replace('T', ' ')}")
+                    st.caption(" / ".join(meta_parts))
+
+                if insight_history:
+                    with st.expander("🕘 過去の生成履歴", expanded=False):
+                        for row in insight_history:
+                            created_at = row.get("created_at", "")
+                            created_label = created_at[11:16] if len(created_at) >= 16 else "--:--"
+                            model_label = row.get("model_name", "model不明")
+                            with st.expander(f"{created_label} {model_label}版", expanded=False):
+                                st.markdown(row.get("content", ""))
             else:
                 st.info("まだ分析結果がありません。上のボタンから Deep Insight を実行してください。")
 
