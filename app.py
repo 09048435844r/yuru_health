@@ -1,6 +1,7 @@
 import logging
 import streamlit as st
 import pandas as pd
+import plotly.graph_objects as go
 from datetime import datetime, timedelta, timezone
 
 JST = timezone(timedelta(hours=9))
@@ -508,17 +509,66 @@ def main():
                 st.link_button("🔗 Google Fit にログイン", auth_url)
 
     with tab_sleep:
-        st.subheader("� 睡眠詳細")
+        st.subheader("💤 睡眠詳細")
         oura_data = data["oura_data"]
 
         if oura_data:
             df = pd.DataFrame(oura_data)
             df["measured_at"] = pd.to_datetime(df["measured_at"])
             df = df.sort_values("measured_at", ascending=False)
+            df_chart = df.sort_values("measured_at")
 
             score_cols = ["sleep_score", "activity_score", "readiness_score"]
             if all(col in df.columns for col in score_cols):
-                st.line_chart(df.set_index("measured_at")[score_cols], use_container_width=True)
+                latest_sleep_score = df.iloc[0]["sleep_score"]
+                st.markdown(f"### 睡眠スコア推移（現在: {latest_sleep_score}点）")
+
+                fig_sleep = go.Figure()
+                fig_sleep.add_trace(go.Scatter(
+                    x=df_chart["measured_at"],
+                    y=df_chart["sleep_score"],
+                    name="睡眠スコア",
+                    mode="lines+markers",
+                    line=dict(color="#2E7D9A", width=3),
+                    marker=dict(size=9, color="#2E7D9A"),
+                    hovertemplate="%{x|%m/%d}<br>睡眠スコア: %{y:.0f}点<extra></extra>",
+                ))
+                fig_sleep.add_trace(go.Scatter(
+                    x=df_chart["measured_at"],
+                    y=df_chart["activity_score"],
+                    name="活動スコア",
+                    mode="lines+markers",
+                    line=dict(color="#4DB6AC", width=2.5),
+                    marker=dict(size=8, color="#4DB6AC"),
+                    hovertemplate="%{x|%m/%d}<br>活動スコア: %{y:.0f}点<extra></extra>",
+                ))
+                fig_sleep.add_trace(go.Scatter(
+                    x=df_chart["measured_at"],
+                    y=df_chart["readiness_score"],
+                    name="レディネス",
+                    mode="lines+markers",
+                    line=dict(color="#80CBC4", width=2.5),
+                    marker=dict(size=8, color="#80CBC4"),
+                    hovertemplate="%{x|%m/%d}<br>レディネス: %{y:.0f}点<extra></extra>",
+                ))
+                fig_sleep.add_hline(
+                    y=80,
+                    line_width=1.5,
+                    line_dash="dash",
+                    line_color="#26A69A",
+                    annotation_text="目標ライン: 80点",
+                    annotation_position="top left",
+                )
+                fig_sleep.update_layout(
+                    height=340,
+                    margin=dict(l=0, r=0, t=10, b=0),
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
+                    yaxis=dict(title="スコア", range=[50, 100]),
+                    xaxis=dict(title=""),
+                    hovermode="x unified",
+                    hoverlabel=dict(font_size=14),
+                )
+                st.plotly_chart(fig_sleep, use_container_width=True)
 
             st.dataframe(
                 df[["measured_at", "sleep_score", "activity_score", "readiness_score", "steps"]].head(10),
@@ -536,8 +586,40 @@ def main():
             df = pd.DataFrame(weight_data)
             df["measured_at"] = pd.to_datetime(df["measured_at"])
             df = df.sort_values("measured_at", ascending=False)
+            df_chart = df.sort_values("measured_at")
+            latest_weight_kg = df.iloc[0]["weight_kg"]
+            target_weight_kg = 60.0
 
-            st.line_chart(df.set_index("measured_at")["weight_kg"], use_container_width=True)
+            st.markdown(f"### 体重推移（現在: {latest_weight_kg:.1f}kg）")
+
+            fig_weight = go.Figure()
+            fig_weight.add_trace(go.Scatter(
+                x=df_chart["measured_at"],
+                y=df_chart["weight_kg"],
+                name="体重",
+                mode="lines+markers",
+                line=dict(color="#5DADE2", width=3),
+                marker=dict(size=9, color="#90CAF9"),
+                hovertemplate="%{x|%m/%d}<br>体重: %{y:.1f}kg<extra></extra>",
+            ))
+            fig_weight.add_hline(
+                y=target_weight_kg,
+                line_width=1.5,
+                line_dash="dash",
+                line_color="#90A4AE",
+                annotation_text=f"目標体重: {target_weight_kg:.1f}kg",
+                annotation_position="top left",
+            )
+            fig_weight.update_layout(
+                height=320,
+                margin=dict(l=0, r=0, t=10, b=0),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
+                yaxis=dict(title="体重 (kg)"),
+                xaxis=dict(title=""),
+                hovermode="x unified",
+                hoverlabel=dict(font_size=14),
+            )
+            st.plotly_chart(fig_weight, use_container_width=True)
 
             st.dataframe(
                 df[["measured_at", "weight_kg"]].head(10),
@@ -557,15 +639,18 @@ def main():
             if df_corr.empty or df_corr["sleep_score"].isna().all():
                 st.info("分析に必要なデータがまだありません。Oura の睡眠データが蓄積されると表示されます。")
             else:
-                import plotly.graph_objects as go
+                latest_co2 = df_corr["co2_avg"].dropna().iloc[-1] if df_corr["co2_avg"].notna().any() else None
+                co2_title = f"CO₂ と睡眠スコア（現在CO₂: {latest_co2:.0f}ppm）" if latest_co2 is not None else "CO₂ と睡眠スコア"
+                st.markdown(f"### {co2_title}")
 
                 fig = go.Figure()
                 fig.add_trace(go.Bar(
                     x=df_corr["date"],
                     y=df_corr["sleep_score"],
                     name="睡眠スコア",
-                    marker_color="rgba(126,87,194,0.7)",
+                    marker_color="rgba(79,195,247,0.72)",
                     yaxis="y",
+                    hovertemplate="%{x}<br>睡眠スコア: %{y:.0f}点<extra></extra>",
                 ))
 
                 if df_corr["co2_avg"].notna().any():
@@ -574,10 +659,20 @@ def main():
                         y=df_corr["co2_avg"],
                         name="CO₂ (ppm)",
                         mode="lines+markers",
-                        line=dict(color="#FF7043", width=2),
-                        marker=dict(size=5),
+                        line=dict(color="#E64A19", width=3),
+                        marker=dict(size=9, color="#F4511E"),
                         yaxis="y2",
+                        hovertemplate="%{x}<br>CO₂: %{y:.0f}ppm<extra></extra>",
                     ))
+                    fig.add_hline(
+                        y=1000,
+                        yref="y2",
+                        line_width=1.5,
+                        line_dash="dash",
+                        line_color="#D32F2F",
+                        annotation_text="CO₂ 警告ライン: 1000ppm",
+                        annotation_position="top left",
+                    )
 
                 fig.update_layout(
                     height=360,
@@ -587,12 +682,18 @@ def main():
                     yaxis2=dict(title="CO₂ (ppm)", overlaying="y", side="right", showgrid=False),
                     xaxis=dict(title=""),
                     bargap=0.3,
+                    hovermode="x unified",
+                    hoverlabel=dict(font_size=14),
                 )
                 st.plotly_chart(fig, use_container_width=True)
 
                 has_temp = df_corr["temp_avg"].notna().any()
                 has_hum = df_corr["humidity_avg"].notna().any()
                 if has_temp or has_hum:
+                    latest_temp = df_corr["temp_avg"].dropna().iloc[-1] if has_temp else None
+                    temp_title = f"室温・湿度の推移（現在室温: {latest_temp:.1f}℃）" if latest_temp is not None else "室温・湿度の推移"
+                    st.markdown(f"### {temp_title}")
+
                     fig2 = go.Figure()
                     if has_temp:
                         fig2.add_trace(go.Scatter(
@@ -600,23 +701,37 @@ def main():
                             y=df_corr["temp_avg"],
                             name="室温 (℃)",
                             mode="lines+markers",
-                            line=dict(color="#26A69A", width=2),
+                            line=dict(color="#F57C00", width=3),
+                            marker=dict(size=9, color="#FB8C00"),
+                            hovertemplate="%{x}<br>室温: %{y:.1f}℃<extra></extra>",
                         ))
+                        fig2.add_hline(
+                            y=28,
+                            line_width=1.5,
+                            line_dash="dash",
+                            line_color="#E53935",
+                            annotation_text="高温注意ライン: 28℃",
+                            annotation_position="top left",
+                        )
                     if has_hum:
                         fig2.add_trace(go.Scatter(
                             x=df_corr["date"],
                             y=df_corr["humidity_avg"],
                             name="湿度 (%)",
                             mode="lines+markers",
-                            line=dict(color="#42A5F5", width=2),
+                            line=dict(color="#90A4AE", width=2.5),
+                            marker=dict(size=8, color="#B0BEC5"),
                             yaxis="y2",
+                            hovertemplate="%{x}<br>湿度: %{y:.1f}%<extra></extra>",
                         ))
                     fig2.update_layout(
-                        height=280,
+                        height=300,
                         margin=dict(l=0, r=0, t=10, b=0),
                         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
                         yaxis=dict(title="室温 (℃)", side="left"),
                         yaxis2=dict(title="湿度 (%)", overlaying="y", side="right", showgrid=False),
+                        hovermode="x unified",
+                        hoverlabel=dict(font_size=14),
                     )
                     st.plotly_chart(fig2, use_container_width=True)
 
