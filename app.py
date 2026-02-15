@@ -36,7 +36,13 @@ st.set_page_config(
 
 def get_database_manager():
     obj = st.session_state.get("_db_manager")
-    if obj is None or not hasattr(obj, "_payload_hash"):
+    required_attrs = (
+        "_payload_hash",
+        "get_daily_insight_history",
+        "save_daily_insight",
+        "get_latest_daily_insight",
+    )
+    if obj is None or any(not hasattr(obj, attr) for attr in required_attrs):
         st.session_state["_db_manager"] = DatabaseManager("config/secrets.yaml")
     return st.session_state["_db_manager"]
 
