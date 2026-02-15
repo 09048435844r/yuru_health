@@ -395,8 +395,10 @@ class DatabaseManager:
                 return
             except Exception as e:
                 logger.info(f"save_daily_insight retry without user_id: {e}")
-
-        self.supabase.table("daily_insights").insert(base_data).execute()
+        try:
+            self.supabase.table("daily_insights").insert(base_data).execute()
+        except Exception as e:
+            logger.warning(f"save_daily_insight failed: {e}")
 
     def get_daily_insight_history(self, target_date: str, user_id: Optional[str] = "user_001",
                                   limit: int = 20) -> List[Dict[str, Any]]:
@@ -412,10 +414,14 @@ class DatabaseManager:
         if user_id:
             try:
                 return query.eq("user_id", user_id).execute().data
-            except Exception:
-                pass
+            except Exception as e:
+                logger.info(f"get_daily_insight_history retry without user_id: {e}")
 
-        return query.execute().data
+        try:
+            return query.execute().data
+        except Exception as e:
+            logger.warning(f"get_daily_insight_history failed: {e}")
+            return []
 
     def get_latest_daily_insight(self, target_date: str,
                                  user_id: Optional[str] = "user_001") -> Optional[Dict[str, Any]]:
