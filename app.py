@@ -402,20 +402,30 @@ def main():
     ])
 
     with tab_summary:
+        if "deep_insight" not in st.session_state:
+            st.session_state.deep_insight = ""
+
         evaluator = get_gemini_evaluator(default_model)
+        insight_container = st.container()
+
         if evaluator.is_available():
-            if st.button("🔍 Gemini 分析（Deep Insight）", use_container_width=True):
+            if st.button("🔍 Gemini 分析（Deep Insight） / 再分析", use_container_width=True):
                 target_date = insight_date.strftime("%Y-%m-%d")
-                with st.spinner(f"生データを取得中... ({target_date})"):
+                with st.spinner("Geminiが昨日のデータを読み解いています..."):
                     raw_data = db_manager.get_raw_data_by_date(target_date)
-                if not raw_data:
-                    st.warning(f"⚠️ {target_date} の生データがありません。🔄ボタンでデータを更新してください。")
-                else:
-                    with st.spinner(f"🔍 Deep Insight 分析中 ({selected_model})..."):
-                        insight = evaluator.deep_analyze(raw_data, target_model=selected_model)
-                    st.success(insight.split("\n")[0] if insight else "分析結果なし")
-                    with st.expander("📋 詳細分析を見る", expanded=False):
-                        st.markdown(insight)
+                    if not raw_data:
+                        st.session_state.deep_insight = ""
+                        st.warning(f"⚠️ {target_date} の生データがありません。🔄ボタンでデータを更新してください。")
+                    else:
+                        st.session_state.deep_insight = evaluator.deep_analyze(raw_data, target_model=selected_model)
+
+        with insight_container:
+            if st.session_state.deep_insight:
+                st.success(st.session_state.deep_insight.split("\n")[0])
+                with st.expander("📋 詳細分析を見る", expanded=False):
+                    st.markdown(st.session_state.deep_insight)
+            else:
+                st.info("まだ分析結果がありません。上のボタンから Deep Insight を実行してください。")
 
         col_a, col_b, col_c = st.columns(3)
         with col_a:
