@@ -74,6 +74,14 @@ yuru_health/
 └── README.md
 ```
 
+## 📚 運用ドキュメント
+
+- [Docs Index](docs/README.md)
+- [API連携ガイド](docs/API_INTEGRATION.md)
+- [Google Fit OAuth 復旧・運用 Runbook](docs/GOOGLE_FIT_OAUTH_RUNBOOK.md)
+- [Operations Playbook](docs/OPERATIONS_PLAYBOOK.md)
+- [Secrets & Config Guide](docs/SECRETS_CONFIGURATION.md)
+
 ## 🏗️ アーキテクチャ
 
 ```
@@ -177,6 +185,10 @@ cp .env.example .env
 
 > **Note:** cron はラウンド数 (`:00`, `:05`) を避けた `3,18,33,48` 分に設定し、
 > GitHub Actions のスケジューリング遅延を軽減しています。
+
+> **Fail-fast運用:** OAuthトークン失効などの認証異常が発生した場合、`python -m src.main --auto` は
+> 非ゼロ終了コードで失敗し、サイレント成功しない設計です。復旧手順は
+> [Google Fit OAuth 復旧・運用 Runbook](docs/GOOGLE_FIT_OAUTH_RUNBOOK.md) を参照してください。
 
 ### 4. Streamlit Cloud
 

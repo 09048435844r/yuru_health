@@ -22,13 +22,13 @@ USER_ID = "user_001"
 
 
 def _run_fetcher(name: str, func):
-    """Fetcher を安全に実行し、結果を1行で返す"""
+    """Fetcher を実行し、失敗時は詳細ログを出して例外を再送出する。"""
     try:
         result = func()
         return result
     except Exception as e:
-        logger.warning(f"{name}: error — {type(e).__name__}")
-        return None
+        logger.exception(f"{name}: error — {type(e).__name__}: {e}")
+        raise
 
 
 def run_all_fetchers():
@@ -53,44 +53,41 @@ def run_all_fetchers():
         data = fetcher.fetch_data(USER_ID, start_str, end_str)
         saved = 0
         for record in data:
-            try:
-                db_manager.insert_oura_data(
-                    user_id=record["user_id"],
-                    measured_at=record["measured_at"],
-                    activity_score=record.get("activity_score"),
-                    sleep_score=record.get("sleep_score"),
-                    readiness_score=record.get("readiness_score"),
-                    steps=record.get("steps"),
-                    total_sleep_duration=record.get("total_sleep_duration"),
-                    raw_data=record.get("raw_data", ""),
-                )
-                saved += 1
-            except Exception:
-                pass
+            db_manager.insert_oura_data(
+                user_id=record["user_id"],
+                measured_at=record["measured_at"],
+                activity_score=record.get("activity_score"),
+                sleep_score=record.get("sleep_score"),
+                readiness_score=record.get("readiness_score"),
+                steps=record.get("steps"),
+                total_sleep_duration=record.get("total_sleep_duration"),
+                raw_data=record.get("raw_data", ""),
+            )
+            saved += 1
         return saved
     results["Oura"] = _run_fetcher("Oura", fetch_oura)
 
     # ── Withings ──
     def fetch_withings():
+        from auth.exceptions import OAuthRefreshError
         from auth.withings_oauth import WithingsOAuth
         from src.fetchers.withings_fetcher import WithingsFetcher
         withings_oauth = WithingsOAuth(db_manager)
-        if not withings_oauth.is_authenticated():
-            return "skip"
+        try:
+            withings_oauth.get_valid_access_token(strict=True)
+        except OAuthRefreshError as e:
+            raise RuntimeError(f"Withings OAuth failed: {e}") from e
         fetcher = WithingsFetcher({}, withings_oauth, db_manager=db_manager)
         data = fetcher.fetch_data(USER_ID, start_str, end_str)
         saved = 0
         for record in data:
-            try:
-                db_manager.insert_weight_data(
-                    user_id=record["user_id"],
-                    measured_at=record["measured_at"],
-                    weight_kg=record["weight_kg"],
-                    raw_data=record.get("raw_data", ""),
-                )
-                saved += 1
-            except Exception:
-                pass
+            db_manager.insert_weight_data(
+                user_id=record["user_id"],
+                measured_at=record["measured_at"],
+                weight_kg=record["weight_kg"],
+                raw_data=record.get("raw_data", ""),
+            )
+            saved += 1
         return saved
     results["Withings"] = _run_fetcher("Withings", fetch_withings)
 
@@ -130,31 +127,28 @@ def run_all_fetchers():
     # OAuth ブラウザフローが必要なため CI では通常スキップ。
     # DB に保存済みトークンがあればリフレッシュして取得を試みる。
     def fetch_google_fit():
+        from auth.exceptions import OAuthRefreshError
         from auth.google_oauth import GoogleOAuth
         from src.fetchers.google_fit_fetcher import GoogleFitFetcher
         gauth = GoogleOAuth(db_manager)
-        gauth.ensure_credentials()
-        if not gauth.is_authenticated():
-            return "skip"
-        creds = gauth.get_credentials()
-        if not creds:
-            return "skip"
+        try:
+            gauth.ensure_credentials(strict=True)
+            creds = gauth.get_credentials(strict=True)
+        except OAuthRefreshError as e:
+            raise RuntimeError(f"Google OAuth failed: {e}") from e
         gfit = GoogleFitFetcher(creds, db_manager=db_manager)
         fit_data = gfit.fetch_all(USER_ID, start_str, end_str)
         saved = 0
         for records in fit_data.values():
             for record in records:
-                try:
-                    db_manager.insert_google_fit_data(
-                        user_id=record["user_id"],
-                        date=record["date"],
-                        data_type=record["data_type"],
-                        value=record["value"],
-                        raw_data=record["raw_data"],
-                    )
-                    saved += 1
-                except Exception:
-                    pass
+                db_manager.insert_google_fit_data(
+                    user_id=record["user_id"],
+                    date=record["date"],
+                    data_type=record["data_type"],
+                    value=record["value"],
+                    raw_data=record["raw_data"],
+                )
+                saved += 1
         return saved
     results["GoogleFit"] = _run_fetcher("GoogleFit", fetch_google_fit)
 
@@ -176,7 +170,11 @@ def main():
     args = parser.parse_args()
 
     if args.auto:
-        run_all_fetchers()
+        try:
+            run_all_fetchers()
+        except Exception:
+            logger.error("auto-fetch failed; exiting with status 1")
+            sys.exit(1)
     else:
         parser.print_help()
         sys.exit(1)

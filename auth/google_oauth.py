@@ -2,6 +2,7 @@ import logging
 import streamlit as st
 from typing import Dict, Any, Optional
 from src.utils.secrets_loader import load_secrets
+from auth.exceptions import OAuthRefreshError
 
 logger = logging.getLogger(__name__)
 
@@ -73,9 +74,11 @@ class GoogleOAuth:
         except Exception:
             pass
     
-    def ensure_credentials(self):
+    def ensure_credentials(self, strict: bool = False):
         """毎回のページロードで呼び出し、session_state にトークンがなければ DB から復元し、期限切れならリフレッシュする"""
         if not GOOGLE_AUTH_AVAILABLE:
+            if strict:
+                raise OAuthRefreshError("Google OAuth dependencies are not installed")
             return
         
         creds = st.session_state.get("google_credentials")
@@ -91,13 +94,19 @@ class GoogleOAuth:
                         logger.info("Google credentials hydrated from Supabase")
             except Exception as e:
                 logger.info(f"Google token hydration failed: {e}")
+                if strict:
+                    raise OAuthRefreshError(f"Google token hydration failed: {e}") from e
                 return
         
         if creds is None:
+            if strict:
+                raise OAuthRefreshError("Google token not found in oauth_tokens")
             return
         
         # 期限切れ → リフレッシュ
         if not isinstance(creds, Credentials):
+            if strict:
+                raise OAuthRefreshError("Google credentials payload is invalid")
             return
         
         if creds.valid:
@@ -111,6 +120,8 @@ class GoogleOAuth:
             except Exception as e:
                 logger.info(f"Google token refresh failed: {e}")
                 st.session_state.pop("google_credentials", None)
+                if strict:
+                    raise OAuthRefreshError(f"Google token refresh failed: {e}") from e
                 return
     
     def _save_credentials(self, creds: "Credentials"):
@@ -173,20 +184,34 @@ class GoogleOAuth:
                 return True
         return False
     
-    def get_credentials(self) -> Optional["Credentials"]:
+    def get_credentials(self, strict: bool = False) -> Optional["Credentials"]:
         """session_state から Credentials を取得し、必要なら refresh"""
         if not GOOGLE_AUTH_AVAILABLE:
+            if strict:
+                raise OAuthRefreshError("Google OAuth dependencies are not installed")
             return None
         creds = st.session_state.get("google_credentials")
+        if creds is None:
+            if strict:
+                raise OAuthRefreshError("Google credentials not found in session_state")
+            return None
         if isinstance(creds, Credentials):
             if creds.expired and creds.refresh_token:
                 try:
                     creds.refresh(Request())
                     self._save_credentials(creds)
-                except Exception:
+                except Exception as e:
                     st.session_state.pop("google_credentials", None)
+                    if strict:
+                        raise OAuthRefreshError(f"Google token refresh failed: {e}") from e
                     return None
-            return creds if creds.valid else None
+            if creds.valid:
+                return creds
+            if strict:
+                raise OAuthRefreshError("Google credentials are invalid")
+            return None
+        if strict:
+            raise OAuthRefreshError("Google credentials object type is invalid")
         return None
     
     def get_authorization_url(self) -> str:

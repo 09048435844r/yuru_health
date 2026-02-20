@@ -170,23 +170,16 @@ class GoogleFitFetcher:
         """
         全データ（歩数・体重・睡眠）をまとめて取得
         """
-        results = {"steps": [], "weight": [], "sleep": []}
-        
-        try:
-            results["steps"] = self.fetch_steps(user_id, start_date, end_date)
-        except Exception:
-            pass
-        
-        try:
-            results["weight"] = self.fetch_weight(user_id, start_date, end_date)
-        except Exception:
-            pass
-        
-        try:
-            results["sleep"] = self.fetch_sleep(user_id, start_date, end_date)
-        except Exception:
-            pass
-        
+        results = {
+            "steps": self.fetch_steps(user_id, start_date, end_date),
+            "weight": self.fetch_weight(user_id, start_date, end_date),
+            "sleep": self.fetch_sleep(user_id, start_date, end_date),
+        }
+
+        total = sum(len(v) for v in results.values())
+        if total == 0:
+            logger.info("Google Fit: no new data returned from API")
+
         return results
     
     def _save_to_data_lake(self, user_id: str, raw_response: Dict[str, Any], category: str):

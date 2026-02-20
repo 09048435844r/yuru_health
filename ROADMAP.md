@@ -1,5 +1,7 @@
 # YuruHealth Roadmap
 
+- 関連ドキュメント: [Docs Index](docs/README.md)
+
 ## 🏆 Philosophy
 - **Input Minimal**: 手動入力は極限まで減らす。
 - **Data Maximal**: Rawデータ（JSON）は全て保存する（Data Lake思想）。
@@ -27,6 +29,7 @@
 - Samsung Health → Health Connect → Google Fit → YuruHealth パイプライン
 - 単体テスト環境の構築 (`pytest`)
 - CI/CD基礎（`pre-commit` hook による commit 前自動テスト）
+- Google Fit OAuth 復旧・運用 Runbook 整備 (`docs/GOOGLE_FIT_OAUTH_RUNBOOK.md`)
 
 ## 🚀 Next Priority (最優先)
 - **YouTube Data API 自動アップロードの実装**

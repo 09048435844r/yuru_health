@@ -2,6 +2,10 @@
 
 このドキュメントでは、Withings APIとOura Ring APIの連携方法を説明します。
 
+Google Fit の復旧・運用（`invalid_grant` 対応、再認証、欠損回復）は以下を参照してください。
+
+- [Google Fit OAuth 復旧・運用 Runbook](./GOOGLE_FIT_OAUTH_RUNBOOK.md)
+
 ## 📋 目次
 
 1. [Withings OAuth2 認証](#withings-oauth2-認証)
@@ -163,6 +167,15 @@ oura:
 - Oura Ringでデータが同期されているか確認
 - Personal Tokenのスコープに `daily` が含まれているか確認
 - 取得期間にデータが存在するか確認
+
+### Google Fit関連
+
+#### `invalid_grant: Token has been expired or revoked.`
+
+- トークン失効または同意取り消しで発生します
+- Streamlit UI で一度 Google Fit をログアウトし、再認証を実施してください
+- 復旧後は `python -m src.main --auto` が `exit code 0` になることを確認してください
+- 詳細手順は [Google Fit OAuth 復旧・運用 Runbook](./GOOGLE_FIT_OAUTH_RUNBOOK.md) を参照
 
 ### データベース関連
 

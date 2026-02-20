@@ -3,6 +3,7 @@ from typing import Dict, Any, Optional
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 from src.utils.secrets_loader import load_secrets
+from auth.exceptions import OAuthRefreshError
 
 JST = timezone(timedelta(hours=9))
 
@@ -114,8 +115,10 @@ class WithingsOAuth:
         else:
             raise Exception(f"Token refresh failed: {result}")
     
-    def get_valid_access_token(self) -> Optional[str]:
+    def get_valid_access_token(self, strict: bool = False) -> Optional[str]:
         if not self.tokens:
+            if strict:
+                raise OAuthRefreshError("Withings token not found in oauth_tokens")
             return None
         
         expires_at = self.tokens.get("expires_at")
@@ -127,10 +130,15 @@ class WithingsOAuth:
             if datetime.now(JST) >= expires_datetime - timedelta(minutes=5):
                 try:
                     self.refresh_access_token()
-                except Exception:
+                except Exception as e:
+                    if strict:
+                        raise OAuthRefreshError(f"Withings token refresh failed: {e}") from e
                     return None
         
-        return self.tokens.get("access_token")
+        access_token = self.tokens.get("access_token")
+        if strict and not access_token:
+            raise OAuthRefreshError("Withings access_token is empty")
+        return access_token
     
     def is_authenticated(self) -> bool:
         return self.get_valid_access_token() is not None

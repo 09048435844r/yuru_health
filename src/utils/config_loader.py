@@ -45,8 +45,13 @@ def _load_st_secrets() -> Dict[str, Any]:
     try:
         import streamlit as st
         # st.secrets は AttrDict 風オブジェクトなので再帰的に dict 化
-        return _to_dict(st.secrets)
-    except Exception:
+        converted = _to_dict(st.secrets)
+        if isinstance(converted, dict):
+            return converted
+        logger.info("st.secrets is not available as dict; fallback to settings.yaml only")
+        return {}
+    except Exception as e:
+        logger.info(f"st.secrets unavailable; fallback to settings.yaml only: {e}")
         return {}
 
 
