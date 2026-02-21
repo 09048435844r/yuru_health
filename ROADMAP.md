@@ -3,6 +3,7 @@
 - 関連ドキュメント: [Docs Index](docs/README.md)
 
 ## 🏆 Philosophy
+データをため込むことが第一優先、使い方は後で考えてもよい
 - **Input Minimal**: 手動入力は極限まで減らす。
 - **Data Maximal**: Rawデータ（JSON）は全て保存する（Data Lake思想）。
 - **Mobile First**: Galaxy Foldでの閲覧・操作を最優先。
