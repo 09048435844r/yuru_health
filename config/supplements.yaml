@@ -6,7 +6,7 @@ items:
     name: "特製ブレンドドリンク"
     type: "base"
     unit_type: "回"
-    default_quantity: 1
+    default_quantity: 1  # 1日朝夕2回
     ingredients:
       プロテイン_g: 15.0
       コラーゲンペプチド_g: 5.0
@@ -26,7 +26,7 @@ items:
     name: "マグネシウム（Doctor's Best High Absorption）"
     type: "optional"
     unit_type: "錠"
-    default_quantity: 2
+    default_quantity: 2  # 夜2錠
     ingredients:
       マグネシウム_mg: 100
 
@@ -34,7 +34,7 @@ items:
     name: "マルチビタミン（Thorne Men's Multi 50+）"
     type: "optional"
     unit_type: "カプセル"
-    default_quantity: 1  # 推奨量: 3カプセル
+    default_quantity: 1  # 朝夕1錠
     ingredients:
       ビタミンA_mcg: 438.3
       ビタミンC_mg: 141.7
@@ -64,7 +64,7 @@ items:
     name: "CoQ10（Life Extension Ubiquinol）"
     type: "optional"
     unit_type: "ソフトジェル"
-    default_quantity: 1
+    default_quantity: 1  #  朝1錠
     ingredients:
       CoQ10_mg: 100
 
@@ -72,7 +72,7 @@ items:
     name: "オメガ3（Nordic Naturals Ultimate Omega）"
     type: "optional"
     unit_type: "ソフトジェル"
-    default_quantity: 2
+    default_quantity: 2  # 朝2錠
     ingredients:
       オメガ3_mg: 640
 
@@ -80,7 +80,7 @@ items:
     name: "ビタミンD3+K2 オイルドロップ（Thorne）"
     type: "optional"
     unit_type: "滴"
-    default_quantity: 2
+    default_quantity: 2  # 朝2滴
     ingredients:
       ビタミンD3_IU: 1000
       ビタミンK2_mcg: 200
@@ -89,7 +89,7 @@ items:
     name: "5-ALA & NMN（ナチュラルレインボー）"
     type: "optional"
     unit_type: "粒"
-    default_quantity: 1
+    default_quantity: 1  # 朝1粒  
     ingredients:
       5-ALA_mg: 25
       NMN_mg: 10
