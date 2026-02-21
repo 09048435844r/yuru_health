@@ -207,6 +207,38 @@ class DatabaseManager:
             logger.warning(f"get_intake_logs failed: {e}")
             return []
 
+    def get_intake_summary_by_date(self, target_date: str, user_id: str = "user_001") -> Dict[str, float]:
+        """指定日の intake_logs を集計し、成分別の総摂取量を返す。"""
+        start = f"{target_date}T00:00:00"
+        end = f"{target_date}T23:59:59"
+        try:
+            response = (
+                self.supabase.table("intake_logs")
+                .select("snapshot_payload")
+                .eq("user_id", user_id)
+                .gte("timestamp", start)
+                .lte("timestamp", end)
+                .execute()
+            )
+        except Exception as e:
+            logger.warning(f"get_intake_summary_by_date failed: {e}")
+            return {}
+
+        totals: Dict[str, float] = {}
+        for row in response.data:
+            snapshot_payload = row.get("snapshot_payload") or {}
+            total_nutrients = snapshot_payload.get("total_nutrients") or {}
+            if not isinstance(total_nutrients, dict):
+                continue
+            for nutrient, amount in total_nutrients.items():
+                try:
+                    numeric_amount = float(amount)
+                except (TypeError, ValueError):
+                    continue
+                totals[nutrient] = round(totals.get(nutrient, 0.0) + numeric_amount, 4)
+
+        return totals
+
     def get_data_arrival_history(self, days: int = 14) -> List[Dict[str, Any]]:
         """過去N日間の (source, fetched_date) リストを raw_data_lake から取得"""
         start_date = (_now_jst() - timedelta(days=days + 1)).isoformat()

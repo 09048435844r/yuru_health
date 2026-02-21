@@ -205,6 +205,9 @@ class GeminiEvaluator(BaseEvaluator):
                 model = self.model
         
         profile = self._load_user_profile()
+        target_date = kwargs.get("target_date")
+        user_id = kwargs.get("user_id", "user_001")
+        db_manager = kwargs.get("db_manager")
 
         data_sections = []
         for source, records in raw_data_dict.items():
@@ -212,6 +215,13 @@ class GeminiEvaluator(BaseEvaluator):
             data_sections.append(f"### {source.upper()} (件数: {len(records)})\n```json\n{json.dumps(payloads, ensure_ascii=False, indent=1, default=str)}\n```")
         
         raw_data_text = "\n\n".join(data_sections)
+
+        intake_section = ""
+        if db_manager and target_date:
+            intake_summary = db_manager.get_intake_summary_by_date(target_date=target_date, user_id=user_id)
+            if intake_summary:
+                lines = [f"- {nutrient}: {amount:g}" for nutrient, amount in sorted(intake_summary.items())]
+                intake_section = "\n\n【当日の摂取成分サマリー（サプリ・ドリンク）】\n" + "\n".join(lines)
         
         prompt = f"""あなたは、以下のユーザーの専属ヘルスコーチです。
 
@@ -225,10 +235,12 @@ class GeminiEvaluator(BaseEvaluator):
 
 【直近の健康データ】
 {raw_data_text}
+{intake_section}
 
 【依頼】
 上記のデータを分析し、ユーザーの悩みや目標に寄り添った、具体的かつ実践的なアドバイスを3点提示してください。
 データに基づいた「気づき」と、無理なくできる「小さなアクション」を提案してください。
+摂取成分サマリーがある場合は、過不足やタイミングの観点も考慮してください。
 口調はフランクで親しみやすく、励ますようにしてください。"""
         
         try:

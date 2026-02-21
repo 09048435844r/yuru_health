@@ -454,7 +454,13 @@ def main():
                     st.warning(f"⚠️ {target_date} の生データがありません。🔄ボタンでデータを更新してください。")
                     return
 
-                insight = evaluator.deep_analyze(raw_data, target_model=selected_model)
+                insight = evaluator.deep_analyze(
+                    raw_data,
+                    target_model=selected_model,
+                    target_date=target_date,
+                    user_id=user_id,
+                    db_manager=db_manager,
+                )
                 db_manager.save_daily_insight(
                     target_date=target_date,
                     content=insight,

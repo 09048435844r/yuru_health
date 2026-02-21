@@ -7,6 +7,7 @@
 - **Data Maximal**: Rawデータ（JSON）は全て保存する（Data Lake思想）。
 - **Mobile First**: Galaxy Foldでの閲覧・操作を最優先。
 - **Cloud Native**: どこからでもアクセス可能、かつサーバーレス。
+- **長期的な目標**: 健康管理の資産化を目指す。AIでの本人でも気がつかない傾向と対策をあぶり出す
 
 ---
 
