@@ -12,6 +12,8 @@ YuruHealth の運用・連携ドキュメント一覧です。
   - `invalid_grant` 復旧、再認証、欠損回復
 - [Operations Playbook](./OPERATIONS_PLAYBOOK.md)
   - 日次運用、障害時の切り分け、確認コマンド
+- [Intake Logging 運用マニュアル](./operations_intake_logging.md)
+  - 摂取ログのGitOps運用、YAML変更手順、プリセット/成分更新
 - [Secrets & Config Guide](./SECRETS_CONFIGURATION.md)
   - `secrets_loader` 優先順位、ローカル/CI/Cloud の設定指針
 
@@ -19,4 +21,5 @@ YuruHealth の運用・連携ドキュメント一覧です。
 
 1. 新規セットアップ: `README.md` → `SECRETS_CONFIGURATION.md`
 2. API連携: `API_INTEGRATION.md`
-3. 障害対応: `OPERATIONS_PLAYBOOK.md` → 必要に応じて `GOOGLE_FIT_OAUTH_RUNBOOK.md`
+3. 摂取ログ運用: `operations_intake_logging.md`
+4. 障害対応: `OPERATIONS_PLAYBOOK.md` → 必要に応じて `GOOGLE_FIT_OAUTH_RUNBOOK.md`
