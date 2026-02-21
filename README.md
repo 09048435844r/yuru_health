@@ -32,7 +32,9 @@
 | **モバイル最適化 UI** | Galaxy Z Fold7 等に対応した Sticky カラム付き横スクロール HTML テーブル |
 | **Sparklines** | SwitchBot / Weather の 24h 気温推移を SVG ミニ折れ線グラフで表示 |
 | **サマリーバッジ** | Oura (睡眠/活動/準備スコア)、Withings (体重)、Google Fit (歩数/睡眠) をカラーバッジで表示 |
-| **Gemini AI Deep Insight** | 生データを横断分析する AI 機能 |
+| **Gemini AI Deep Insight** | 生データを横断分析し、摂取ログ日次サマリーも加味して示唆を出す AI 機能 |
+| **Intake Logging (YAML Master + Snapshot)** | `config/supplements.yaml` をマスターとして、記録時の成分計算結果を `intake_logs.snapshot_payload` に不変スナップショット保存 |
+| **Fail-fast Data Pipeline** | OAuth トークン失効・認証異常・Fetcher 例外を握りつぶさず即時失敗（非ゼロ終了）で検知可能 |
 | **Raw Data View** | サイドバーのチェックボックスで `raw_data_lake` 最新 100 件を表示 |
 | **Data Lake** | 全ソースの生 JSON を `raw_data_lake` に一元保存 |
 
@@ -60,13 +62,17 @@ yuru_health/
 │   │   └── gemini_evaluator.py     # Gemini AI 評価
 │   └── utils/
 │       ├── secrets_loader.py       # シークレット読み込み (env → YAML → st.secrets)
+│       ├── supplements_loader.py    # 摂取マスター読込 + スナップショット計算
 │       └── sparkline.py            # SVG Sparkline + Badge + HTML テーブル生成
 ├── auth/
 │   ├── withings_oauth.py           # Withings OAuth2 (Supabase 永続化)
 │   └── google_oauth.py             # Google OAuth2 (Supabase 永続化)
 ├── config/
+│   ├── supplements.yaml            # 摂取マスター (GitOps運用)
 │   ├── secrets.example.yaml        # secrets テンプレート
 │   └── settings.example.yaml       # settings テンプレート
+├── docs/schema/
+│   └── intake_logs.sql             # 摂取ログ DDL
 ├── .github/workflows/
 │   └── periodic_fetch.yml          # 15 分間隔自動取得 (ラウンド数回避 cron)
 ├── .env.example                    # 環境変数テンプレート
@@ -89,6 +95,7 @@ yuru_health/
         │
         ▼
   src/main.py --auto  ← GitHub Actions (cron: 3,18,33,48 * * * *)
+    └─ fail-fast: 認証異常・Fetcher例外は即失敗（silent skipしない）
         │
         ▼
   DatabaseManager.save_raw_data()
@@ -103,8 +110,12 @@ yuru_health/
         ▼
   app.py (Streamlit UI)
     ├─ 記録の足跡 (Sparklines + Badges HTML テーブル)
+    ├─ Intake Logging
+    │   ├─ config/supplements.yaml (1単位あたり成分 + default_quantity)
+    │   ├─ build_intake_snapshot()
+    │   └─ intake_logs.snapshot_payload (不変スナップショット)
     ├─ 今日のメトリクス
-    ├─ Gemini AI Deep Insight
+    ├─ Gemini AI Deep Insight (raw_data_lake + intake_logs日次集計)
     └─ Raw Data View (サイドバー)
 ```
 
@@ -253,7 +264,7 @@ CREATE TABLE raw_data_lake (
 );
 
 -- 摂取ログ（レシピ変更の影響を受けないスナップショット保存）
-CREATE TABLE intake_logs (
+CREATE TABLE IF NOT EXISTS intake_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id TEXT NOT NULL,
     timestamp TIMESTAMPTZ NOT NULL,
@@ -262,14 +273,14 @@ CREATE TABLE intake_logs (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_intake_logs_user_timestamp
-    ON intake_logs(user_id, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_intake_logs_user_timestamp
+    ON intake_logs (user_id, timestamp DESC);
 
 -- その他: weight_data, oura_data, google_fit_data, environmental_logs
 -- (スキーマは src/database_manager.py の insert メソッドを参照)
 ```
 
-補足: `docs/schema/intake_logs.sql` にも同内容のDDLがあります。
+補足: `docs/schema/intake_logs.sql` を intake_logs の参照DDL（source of truth）として運用してください。
 
 ## 🧪 開発・テスト (Development & Testing)
 

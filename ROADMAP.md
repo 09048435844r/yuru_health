@@ -33,28 +33,48 @@
 - CI/CD基礎（`pre-commit` hook による commit 前自動テスト）
 - Google Fit OAuth 復旧・運用 Runbook 整備 (`docs/GOOGLE_FIT_OAUTH_RUNBOOK.md`)
 
-## 🚀 Next Priority (最優先)
-- **YouTube Data API 自動アップロードの実装**
-- 目標: データ可視化・レポートの定期動画化/配信フローを自動化する
+## ✅ Phase 4: Reliability & Intake Logging — Done
+- Fail-fast 運用を main/fetcher/auth まで貫通
+  - OAuth トークン失効時に silent skip せず即時失敗（非ゼロ終了）
+  - 例外握りつぶしを削減し、障害を検知可能な形で運用
+- YAML ベース摂取ログ機能を実装
+  - `config/supplements.yaml` を GitOps マスターとして運用
+  - 記録時に `intake_logs.snapshot_payload` へ不変スナップショット保存
+  - 後入力しやすい日時プリセット、誤記録取消（削除）導線を実装
+- Deep Insight へ摂取成分日次サマリーを統合（raw_data と合わせて分析）
 
-## 🎵 Phase 4: Context Awareness (Music & Life)
+## 🚀 Phase 5: Discord自動通知（Next Priority）
+- 目的: 異常や重要イベントを見逃さない運用を作る
+- Action:
+  - Deep Insight 結果や fetch 失敗を Discord Webhook へ通知
+  - 日次サマリー（主要KPI + 摂取成分ハイライト）を定時配信
+  - 通知のしきい値・送信時間・チャンネルを設定化
+
+## 🎵 Phase 6: Context Awareness (Music & Life)
 - **目的**: 音楽と健康データの相関分析。
 - **Action**: Last.fm API連携、Listening Historyの取り込み。
 
-## 🧠 Phase 5: Advanced AI Analysis
+## 🧠 Phase 7: Advanced AI Analysis
 - **目的**: 蓄積されたRawデータ（JSON）のDeep Dive。
 - **Action**: LangChain / Gemini Pro を用いた自然言語でのデータベースクエリ（Text-to-SQL）。
 
-## 🎨 Phase 6: UI/UX Improvement
+## 🎨 Phase 8: UI/UX Improvement
 - **目的**: ダッシュボードの見やすさ・操作性向上。
 - **Action**:
     - グラフのインタラクティブ化 (Plotly / Altair)
     - 週次・月次レポート自動生成
     - PWA対応の検討
 
-## 📊 Phase 7: Data Analytics
+## 📊 Phase 9: Data Analytics
 - **目的**: 長期トレンド分析と健康インサイト。
 - **Action**:
     - 体重・睡眠・活動の相関分析
     - 異常値検出アラート
     - 目標設定と進捗トラッキング
+
+## 🖥️ Future Vision: Self-hosting on Synology NAS
+- **目的**: ローカルネットワーク中心の爆速レスポンスと運用コスト最適化。
+- **Milestones**:
+  - Streamlit + Python batch を Docker 化し NAS 上で常駐
+  - Supabase 連携継続 or Postgres ローカル併用の比較検証
+  - バックアップ／復旧／ゼロダウンタイム更新手順を標準化

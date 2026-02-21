@@ -1,5 +1,10 @@
 # サプリ・ドリンク成分マスター
 # 値は純粋な数値、単位はキー名に含める（例: ビタミンC_mg, ビタミンD_IU）
+# このYAMLは GitOps 運用（UIでのマスター編集は行わない）
+# 記録時は intake_logs.snapshot_payload にスナップショット保存されるため、
+# ここを後から変更しても過去ログの値は変わらない
+# ingredients は「1単位あたり」の成分量、default_quantity は UI 初期値
+# scenes は Morning / Noon / Night / Workout / Anytime を想定
 
 items:
   blend_drink:

@@ -178,8 +178,13 @@ class DatabaseManager:
         response = query.execute()
         return response.data
 
-    def insert_intake_log(self, user_id: str, timestamp: str, scene: str,
-                          snapshot_payload: Dict[str, Any]):
+    def insert_intake_log(
+        self,
+        user_id: str,
+        timestamp: str,
+        scene: str,
+        snapshot_payload: Dict[str, Any],
+    ) -> None:
         data = {
             "user_id": user_id,
             "timestamp": timestamp,
@@ -207,7 +212,7 @@ class DatabaseManager:
             logger.warning(f"get_intake_logs failed: {e}")
             return []
 
-    def delete_intake_log(self, intake_log_id: str, user_id: str = "user_001"):
+    def delete_intake_log(self, intake_log_id: str, user_id: str = "user_001") -> None:
         """指定 ID の intake_logs レコードを削除する。"""
         try:
             (
