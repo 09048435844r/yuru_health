@@ -47,6 +47,8 @@ def get_database_manager():
         "get_daily_insight_history",
         "save_daily_insight",
         "get_latest_daily_insight",
+        "insert_intake_log",
+        "get_intake_logs",
     )
     if obj is None or any(not hasattr(obj, attr) for attr in required_attrs):
         st.session_state["_db_manager"] = DatabaseManager("config/secrets.yaml")
