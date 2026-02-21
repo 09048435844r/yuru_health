@@ -207,6 +207,21 @@ class DatabaseManager:
             logger.warning(f"get_intake_logs failed: {e}")
             return []
 
+    def delete_intake_log(self, intake_log_id: str, user_id: str = "user_001"):
+        """指定 ID の intake_logs レコードを削除する。"""
+        try:
+            (
+                self.supabase.table("intake_logs")
+                .delete()
+                .eq("id", intake_log_id)
+                .eq("user_id", user_id)
+                .execute()
+            )
+            logger.info(f"intake_logs DELETE: id={intake_log_id}, user={user_id}")
+        except Exception as e:
+            logger.warning(f"delete_intake_log failed: {e}")
+            raise
+
     def get_intake_summary_by_date(self, target_date: str, user_id: str = "user_001") -> Dict[str, float]:
         """指定日の intake_logs を集計し、成分別の総摂取量を返す。"""
         start = f"{target_date}T00:00:00"

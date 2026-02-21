@@ -49,6 +49,8 @@ def get_database_manager():
         "get_latest_daily_insight",
         "insert_intake_log",
         "get_intake_logs",
+        "get_intake_summary_by_date",
+        "delete_intake_log",
     )
     if obj is None or any(not hasattr(obj, attr) for attr in required_attrs):
         st.session_state["_db_manager"] = DatabaseManager("config/secrets.yaml")
@@ -731,11 +733,11 @@ def main():
 
             st.markdown("#### 🕘 直近12時間タイムライン")
             if recent_logs:
-                timeline_rows = []
                 for row in recent_logs:
                     payload = row.get("snapshot_payload") or {}
                     items = payload.get("items", []) if isinstance(payload, dict) else []
                     total_nutrients = payload.get("total_nutrients", {}) if isinstance(payload, dict) else {}
+                    intake_log_id = row.get("id")
                     ts = row.get("timestamp")
                     ts_label = str(ts)
                     try:
@@ -745,15 +747,28 @@ def main():
                         ts_label = dt.astimezone(JST).strftime("%m/%d %H:%M")
                     except Exception:
                         pass
-                    timeline_rows.append(
-                        {
-                            "時刻": ts_label,
-                            "シーン": row.get("scene", "-"),
-                            "アイテム数": len(items),
-                            "成分数": len(total_nutrients),
-                        }
-                    )
-                st.dataframe(pd.DataFrame(timeline_rows), use_container_width=True, hide_index=True)
+
+                    row_col, action_col = st.columns([6, 2])
+                    with row_col:
+                        st.caption(
+                            f"{ts_label} / {row.get('scene', '-')} / アイテム{len(items)}件 / 成分{len(total_nutrients)}件"
+                        )
+                    with action_col:
+                        if intake_log_id and st.button("🗑️ 取消", key=f"intake_delete_{intake_log_id}"):
+                            st.session_state["pending_intake_delete_id"] = intake_log_id
+
+                    if intake_log_id and st.session_state.get("pending_intake_delete_id") == intake_log_id:
+                        confirm_col, cancel_col = st.columns([3, 2])
+                        with confirm_col:
+                            if st.button("この記録を削除", key=f"intake_confirm_delete_{intake_log_id}", type="primary"):
+                                db_manager.delete_intake_log(intake_log_id=intake_log_id, user_id=user_id)
+                                st.session_state.pop("pending_intake_delete_id", None)
+                                st.success("記録を削除しました。")
+                                st.rerun()
+                        with cancel_col:
+                            if st.button("キャンセル", key=f"intake_cancel_delete_{intake_log_id}"):
+                                st.session_state.pop("pending_intake_delete_id", None)
+                                st.rerun()
             else:
                 st.caption("直近12時間の摂取ログはまだありません。")
 
