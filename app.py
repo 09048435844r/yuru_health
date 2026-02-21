@@ -609,14 +609,57 @@ def main():
             default_items = set(scene_preset.get("default_items", []))
 
             now_jst = datetime.now(JST)
+            scene_time_presets = {
+                "Morning": (7, 0),
+                "Noon": (12, 0),
+                "Night": (21, 0),
+                "Workout": (18, 0),
+            }
+
+            if "intake_log_date" not in st.session_state:
+                st.session_state["intake_log_date"] = now_jst.date()
+            if "intake_log_time" not in st.session_state:
+                hh_mm = scene_time_presets.get(selected_scene)
+                if hh_mm:
+                    st.session_state["intake_log_time"] = now_jst.replace(
+                        hour=hh_mm[0], minute=hh_mm[1], second=0, microsecond=0
+                    ).time()
+                else:
+                    st.session_state["intake_log_time"] = now_jst.time().replace(second=0, microsecond=0)
+
+            prev_scene_key = "_intake_prev_scene"
+            if st.session_state.get(prev_scene_key) != selected_scene:
+                hh_mm = scene_time_presets.get(selected_scene)
+                if hh_mm:
+                    st.session_state["intake_log_time"] = now_jst.replace(
+                        hour=hh_mm[0], minute=hh_mm[1], second=0, microsecond=0
+                    ).time()
+                st.session_state[prev_scene_key] = selected_scene
+
+            st.caption("後から入力しやすいように、日付ショートカットとシーン時刻プリセットを使えます。")
+            quick_today, quick_yesterday, quick_two_days, quick_scene_time = st.columns(4)
+            if quick_today.button("今日", key="intake_date_today"):
+                st.session_state["intake_log_date"] = now_jst.date()
+                st.rerun()
+            if quick_yesterday.button("昨日", key="intake_date_yesterday"):
+                st.session_state["intake_log_date"] = (now_jst - timedelta(days=1)).date()
+                st.rerun()
+            if quick_two_days.button("一昨日", key="intake_date_two_days"):
+                st.session_state["intake_log_date"] = (now_jst - timedelta(days=2)).date()
+                st.rerun()
+            if quick_scene_time.button("シーン時刻", key="intake_apply_scene_time"):
+                hh_mm = scene_time_presets.get(selected_scene)
+                if hh_mm:
+                    st.session_state["intake_log_time"] = now_jst.replace(
+                        hour=hh_mm[0], minute=hh_mm[1], second=0, microsecond=0
+                    ).time()
+                else:
+                    st.session_state["intake_log_time"] = now_jst.time().replace(second=0, microsecond=0)
+                st.rerun()
+
             col_date, col_time = st.columns(2)
-            intake_date = col_date.date_input("摂取日", value=now_jst.date(), key="intake_log_date")
-            intake_time = col_time.time_input(
-                "摂取時刻",
-                value=now_jst.time().replace(second=0, microsecond=0),
-                step=600,
-                key="intake_log_time",
-            )
+            intake_date = col_date.date_input("摂取日", key="intake_log_date")
+            intake_time = col_time.time_input("摂取時刻", step=600, key="intake_log_time")
             intake_timestamp = datetime.combine(intake_date, intake_time).replace(tzinfo=JST)
 
             recent_logs = db_manager.get_intake_logs(user_id=user_id, hours=12, limit=20)
