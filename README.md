@@ -252,9 +252,24 @@ CREATE TABLE raw_data_lake (
     CONSTRAINT unique_raw_data_v2 UNIQUE (user_id, fetched_at, source, category)
 );
 
+-- 摂取ログ（レシピ変更の影響を受けないスナップショット保存）
+CREATE TABLE intake_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id TEXT NOT NULL,
+    timestamp TIMESTAMPTZ NOT NULL,
+    scene TEXT NOT NULL,
+    snapshot_payload JSONB NOT NULL DEFAULT '{}',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_intake_logs_user_timestamp
+    ON intake_logs(user_id, timestamp DESC);
+
 -- その他: weight_data, oura_data, google_fit_data, environmental_logs
 -- (スキーマは src/database_manager.py の insert メソッドを参照)
 ```
+
+補足: `docs/schema/intake_logs.sql` にも同内容のDDLがあります。
 
 ## 🧪 開発・テスト (Development & Testing)
 

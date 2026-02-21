@@ -177,7 +177,36 @@ class DatabaseManager:
             query = query.eq("data_type", data_type)
         response = query.execute()
         return response.data
-    
+
+    def insert_intake_log(self, user_id: str, timestamp: str, scene: str,
+                          snapshot_payload: Dict[str, Any]):
+        data = {
+            "user_id": user_id,
+            "timestamp": timestamp,
+            "scene": scene,
+            "snapshot_payload": self._parse_raw_data(snapshot_payload),
+        }
+        self.supabase.table("intake_logs").insert(data).execute()
+        logger.info(f"intake_logs INSERT: user={user_id}, scene={scene}, timestamp={timestamp}")
+
+    def get_intake_logs(self, user_id: str = "user_001", hours: int = 12,
+                        limit: int = 20) -> List[Dict[str, Any]]:
+        start_at = (_now_jst() - timedelta(hours=hours)).isoformat()
+        try:
+            response = (
+                self.supabase.table("intake_logs")
+                .select("id, user_id, timestamp, scene, snapshot_payload, created_at")
+                .eq("user_id", user_id)
+                .gte("timestamp", start_at)
+                .order("timestamp", desc=True)
+                .limit(limit)
+                .execute()
+            )
+            return response.data
+        except Exception as e:
+            logger.warning(f"get_intake_logs failed: {e}")
+            return []
+
     def get_data_arrival_history(self, days: int = 14) -> List[Dict[str, Any]]:
         """過去N日間の (source, fetched_date) リストを raw_data_lake から取得"""
         start_date = (_now_jst() - timedelta(days=days + 1)).isoformat()

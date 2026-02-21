@@ -18,6 +18,12 @@ from auth.google_oauth import GoogleOAuth
 from src.fetchers.google_fit_fetcher import GoogleFitFetcher
 from src.utils.sparkline import build_footprint_html
 from src.utils.config_loader import load_settings
+from src.utils.supplements_loader import (
+    build_intake_snapshot,
+    format_nutrient_label,
+    get_scene_preset,
+    load_supplements,
+)
 
 try:
     from streamlit_js_eval import get_geolocation
@@ -401,8 +407,9 @@ def main():
                 st.rerun()
 
     # ── タブ化 UI ──
-    tab_summary, tab_sleep, tab_weight, tab_env = st.tabs([
+    tab_summary, tab_intake, tab_sleep, tab_weight, tab_env = st.tabs([
         "📊 サマリー",
+        "🥤 摂取ログ",
         "💤 睡眠詳細",
         "⚖️ 体重推移",
         "🌡️ 環境ログ",
@@ -574,6 +581,159 @@ def main():
                 st.info("Google Fit に接続して、Samsung Health のデータを取得できます。")
                 auth_url = google_oauth.get_authorization_url()
                 st.link_button("🔗 Google Fit にログイン", auth_url)
+
+    with tab_intake:
+        st.subheader("🥤 摂取ログ・トラッキング")
+        user_id = "user_001"
+
+        supplements = load_supplements()
+        items_master = supplements.get("items", {})
+        presets = supplements.get("presets", {})
+
+        if not items_master:
+            st.warning("config/supplements.yaml に items が未定義です。")
+        else:
+            scene_options = list(presets.keys()) or ["Morning", "Noon", "Night", "Workout", "Anytime"]
+            selected_scene = st.selectbox("シーン", options=scene_options, index=0)
+            scene_preset = get_scene_preset(selected_scene, supplements)
+            default_items = set(scene_preset.get("default_items", []))
+            default_scale = float(scene_preset.get("default_scale", 1.0))
+
+            now_jst = datetime.now(JST)
+            col_date, col_time = st.columns(2)
+            intake_date = col_date.date_input("摂取日", value=now_jst.date(), key="intake_log_date")
+            intake_time = col_time.time_input(
+                "摂取時刻",
+                value=now_jst.time().replace(second=0, microsecond=0),
+                step=600,
+                key="intake_log_time",
+            )
+            intake_timestamp = datetime.combine(intake_date, intake_time).replace(tzinfo=JST)
+
+            recent_logs = db_manager.get_intake_logs(user_id=user_id, hours=12, limit=20)
+            recent_same_scene = []
+            for row in recent_logs:
+                if row.get("scene") != selected_scene:
+                    continue
+                ts = row.get("timestamp")
+                try:
+                    row_dt = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+                    if row_dt.tzinfo is None:
+                        row_dt = row_dt.replace(tzinfo=JST)
+                    row_dt = row_dt.astimezone(JST)
+                except Exception:
+                    continue
+                if abs((intake_timestamp - row_dt).total_seconds()) <= 30 * 60:
+                    recent_same_scene.append(row_dt)
+
+            if recent_same_scene:
+                latest = max(recent_same_scene)
+                st.warning(
+                    f"⚠️ 直近30分に同じシーン（{selected_scene}）の記録があります: {latest.strftime('%m/%d %H:%M')}"
+                )
+
+            grouped_items = {"base": [], "optional": []}
+            for item_id, item in items_master.items():
+                item_type = item.get("type", "optional")
+                if item_type not in grouped_items:
+                    item_type = "optional"
+                grouped_items[item_type].append((item_id, item))
+
+            scale_options = [x / 10 for x in range(5, 16)]
+            selected_item_scales = {}
+
+            for item_type, label in (("base", "🧱 ベース"), ("optional", "✨ オプション")):
+                items = grouped_items.get(item_type, [])
+                if not items:
+                    continue
+                st.markdown(f"**{label}**")
+                for item_id, item in items:
+                    item_name = item.get("name", item_id)
+                    checked = st.checkbox(
+                        item_name,
+                        value=item_id in default_items,
+                        key=f"intake_chk_{selected_scene}_{item_id}",
+                    )
+                    if checked:
+                        ratio_default = default_scale if item_id in default_items else 1.0
+                        ratio = st.select_slider(
+                            f"{item_name} の摂取倍率",
+                            options=scale_options,
+                            value=ratio_default,
+                            format_func=lambda v: f"{int(v * 100)}%",
+                            key=f"intake_scale_{selected_scene}_{item_id}",
+                        )
+                        selected_item_scales[item_id] = ratio
+
+            snapshot_payload = build_intake_snapshot(items_master, selected_item_scales)
+            if selected_item_scales:
+                with st.expander("🧪 スナップショット確認", expanded=False):
+                    total_nutrients = snapshot_payload.get("total_nutrients", {})
+                    nutrient_rows = [
+                        {"成分": format_nutrient_label(k), "摂取量": v}
+                        for k, v in total_nutrients.items()
+                    ]
+                    if nutrient_rows:
+                        st.dataframe(pd.DataFrame(nutrient_rows), use_container_width=True, hide_index=True)
+                    st.json(snapshot_payload)
+            else:
+                st.info("記録するアイテムを1つ以上選択してください。")
+
+            st.markdown(
+                """
+                <style>
+                div[data-testid="stButton"] button[kind="primary"] {
+                    min-height: 56px;
+                    font-size: 1.05rem;
+                    font-weight: 700;
+                }
+                </style>
+                """,
+                unsafe_allow_html=True,
+            )
+
+            if st.button("✅ 記録する", type="primary", use_container_width=True, key="save_intake_log"):
+                if not selected_item_scales:
+                    st.error("保存するには最低1アイテムを選択してください。")
+                else:
+                    db_manager.insert_intake_log(
+                        user_id=user_id,
+                        timestamp=intake_timestamp.isoformat(),
+                        scene=selected_scene,
+                        snapshot_payload=snapshot_payload,
+                    )
+                    st.success(
+                        f"保存しました: {selected_scene} / {intake_timestamp.strftime('%Y-%m-%d %H:%M')}"
+                    )
+                    st.rerun()
+
+            st.markdown("#### 🕘 直近12時間タイムライン")
+            if recent_logs:
+                timeline_rows = []
+                for row in recent_logs:
+                    payload = row.get("snapshot_payload") or {}
+                    items = payload.get("items", []) if isinstance(payload, dict) else []
+                    total_nutrients = payload.get("total_nutrients", {}) if isinstance(payload, dict) else {}
+                    ts = row.get("timestamp")
+                    ts_label = str(ts)
+                    try:
+                        dt = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+                        if dt.tzinfo is None:
+                            dt = dt.replace(tzinfo=JST)
+                        ts_label = dt.astimezone(JST).strftime("%m/%d %H:%M")
+                    except Exception:
+                        pass
+                    timeline_rows.append(
+                        {
+                            "時刻": ts_label,
+                            "シーン": row.get("scene", "-"),
+                            "アイテム数": len(items),
+                            "成分数": len(total_nutrients),
+                        }
+                    )
+                st.dataframe(pd.DataFrame(timeline_rows), use_container_width=True, hide_index=True)
+            else:
+                st.caption("直近12時間の摂取ログはまだありません。")
 
     with tab_sleep:
         st.subheader("💤 睡眠詳細")

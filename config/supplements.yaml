@@ -1,0 +1,70 @@
+# サプリ・ドリンク成分マスター
+# 値は純粋な数値、単位はキー名に含める（例: ビタミンC_mg, ビタミンD_IU）
+
+items:
+  blend_drink:
+    name: "特製ブレンドドリンク"
+    type: "base"
+    ingredients:
+      ビタミンC_mg: 1000
+      マグネシウム_mg: 400
+      亜鉛_mg: 15
+      プロテイン_g: 15.5
+
+  probiotic:
+    name: "プロバイオティクス"
+    type: "optional"
+    ingredients:
+      乳酸菌_CFUs: 10000000000
+
+  vitamin_d3:
+    name: "ビタミンD3"
+    type: "optional"
+    ingredients:
+      ビタミンD_IU: 2000
+
+  magnesium_night:
+    name: "マグネシウム（Night）"
+    type: "base"
+    ingredients:
+      マグネシウム_mg: 250
+
+  protein_shake:
+    name: "プロテインシェイク"
+    type: "base"
+    ingredients:
+      プロテイン_g: 25
+      ロイシン_mg: 2700
+
+  bcaa:
+    name: "BCAA"
+    type: "optional"
+    ingredients:
+      BCAA_mg: 5000
+
+presets:
+  Morning:
+    default_items:
+      - blend_drink
+      - vitamin_d3
+    default_scale: 1.0
+
+  Noon:
+    default_items:
+      - probiotic
+    default_scale: 1.0
+
+  Night:
+    default_items:
+      - magnesium_night
+    default_scale: 1.0
+
+  Workout:
+    default_items:
+      - protein_shake
+      - bcaa
+    default_scale: 1.0
+
+  Anytime:
+    default_items: []
+    default_scale: 1.0
