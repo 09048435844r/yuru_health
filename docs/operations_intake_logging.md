@@ -14,6 +14,12 @@
 - その後に YAML を変更しても、**過去ログの JSONB は書き換わりません**。
 - つまり「将来のレシピ変更」と「過去の摂取記録」は分離されており、安全です。
 
+### 1-3. 量の定義は「1単位あたり」+「デフォルト数量」
+- `items.<item_id>.ingredients` は **1単位あたりの成分量** を定義します。
+- `items.<item_id>.unit_type` で単位（例: `錠`, `滴`, `回`）を指定します。
+- `items.<item_id>.default_quantity` は UI 初期値（普段の摂取量）です。
+- 製品推奨量を別フィールドで持たず、必要ならコメントで残します（例: `# 製品推奨: 2錠`）。
+
 ---
 
 ## 2. 実務 How-To
@@ -28,7 +34,7 @@
 編集箇所:
 - `config/supplements.yaml` の `presets.<Scene>.default_items`
 
-#### 例: Morning から `vitamin_d3` を外す
+#### 例: Morning から `vitamin_d3_k2_oil` を外す
 
 変更前:
 ```yaml
@@ -36,8 +42,7 @@ presets:
   Morning:
     default_items:
       - blend_drink
-      - vitamin_d3
-    default_scale: 1.0
+      - vitamin_d3_k2_oil
 ```
 
 変更後:
@@ -46,7 +51,6 @@ presets:
   Morning:
     default_items:
       - blend_drink
-    default_scale: 1.0
 ```
 
 ポイント:
@@ -71,6 +75,8 @@ items:
   blend_drink:
     name: "特製ブレンドドリンク"
     type: "base"
+    unit_type: "回"
+    default_quantity: 1
     ingredients:
       イヌリン_g: 5
       ビタミンC_mg: 1000
@@ -82,14 +88,28 @@ items:
   blend_drink:
     name: "特製ブレンドドリンク"
     type: "base"
+    unit_type: "回"
+    default_quantity: 1
     ingredients:
       イヌリン_g: 10
       ビタミンC_mg: 1000
 ```
 
 ポイント:
-- 値は必ず数値（int/float）で管理します。
+- 値は必ず数値（int/float）で管理します（1単位あたり）。
 - 単位はキー名に含める形式を維持します（例: `_mg`, `_g`, `_IU`）。
+
+#### 参考: デフォルト数量だけを変える場合
+```yaml
+items:
+  magnesium_doctors_best:
+    name: "マグネシウム"
+    type: "optional"
+    unit_type: "錠"
+    default_quantity: 3  # 実際の摂取量（製品推奨: 2錠）
+    ingredients:
+      マグネシウム_mg: 100
+```
 
 ---
 
@@ -121,21 +141,23 @@ items:
   omega3_capsule:
     name: "オメガ3"
     type: "optional"
+    unit_type: "ソフトジェル"
+    default_quantity: 2
     ingredients:
-      EPA_mg: 600
-      DHA_mg: 400
+      EPA_mg: 325
+      DHA_mg: 225
 
 presets:
   Night:
     default_items:
-      - magnesium_night
+      - magnesium_doctors_best
       - omega3_capsule
-    default_scale: 1.0
 ```
 
 ポイント:
 - `item_id` は一意にする（重複禁止）。
 - 先に `items` を追加し、その後 `presets` へ組み込むのが安全です。
+- `ingredients` は「1単位あたり」に揃え、`default_quantity` で日常運用値を表現します。
 
 ---
 
@@ -170,6 +192,8 @@ items:
   multivitamin:
     name: "マルチビタミン（旧）"
     type: "optional"
+    unit_type: "カプセル"
+    default_quantity: 3
     ingredients:
       ビタミンC_mg: 100
       亜鉛_mg: 10
@@ -177,6 +201,8 @@ items:
   multivitamin_v2:
     name: "マルチビタミン（新）"
     type: "optional"
+    unit_type: "カプセル"
+    default_quantity: 3
     ingredients:
       ビタミンC_mg: 120
       亜鉛_mg: 12
@@ -186,7 +212,6 @@ presets:
     default_items:
       - blend_drink
       - multivitamin_v2
-    default_scale: 1.0
 ```
 
 判断基準:
@@ -202,6 +227,7 @@ YAML変更後は最低限これを確認:
 - [ ] `default_items` のIDが `items` に存在する
 - [ ] 成分値が文字列でなく数値になっている
 - [ ] 単位がキー名に含まれている（`_mg`, `_g`, `_IU` など）
+- [ ] 各 item に `unit_type` と `default_quantity` がある
 
 ---
 

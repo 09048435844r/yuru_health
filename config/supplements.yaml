@@ -5,66 +5,157 @@ items:
   blend_drink:
     name: "特製ブレンドドリンク"
     type: "base"
+    unit_type: "回"
+    default_quantity: 1
     ingredients:
-      ビタミンC_mg: 1000
-      マグネシウム_mg: 400
-      亜鉛_mg: 15
-      プロテイン_g: 15.5
+      プロテイン_g: 15.0
+      コラーゲンペプチド_g: 5.0
+      クレアチンモノハイドレート_g: 3.0
+      イヌリン_g: 5.0
+      サイリウムハスク_g: 3.0
+      ココアパウダー_g: 5.0
+      すりごま_g: 5.0
+      ターメリック_g: 1.0
+      ジンジャー_g: 1.0
+      シナモン_g: 0.5
+      クミン_g: 1.0
+      コリアンダー_g: 1.0
+      ブラックペッパー_g: 0.05
 
-  probiotic:
-    name: "プロバイオティクス"
+  magnesium_doctors_best:
+    name: "マグネシウム（Doctor's Best High Absorption）"
     type: "optional"
+    unit_type: "錠"
+    default_quantity: 2
     ingredients:
-      乳酸菌_CFUs: 10000000000
+      マグネシウム_mg: 100
 
-  vitamin_d3:
-    name: "ビタミンD3"
+  mens_multi_50:
+    name: "マルチビタミン（Thorne Men's Multi 50+）"
     type: "optional"
+    unit_type: "カプセル"
+    default_quantity: 1  # 推奨量: 3カプセル
     ingredients:
-      ビタミンD_IU: 2000
+      ビタミンA_mcg: 438.3
+      ビタミンC_mg: 141.7
+      ビタミンD3_IU: 166.7
+      ビタミンE_mg: 44.7
+      チアミン_mg: 6.7
+      リボフラビン_mg: 1.8
+      ナイアシン_mg: 26.7
+      ビタミンB6_mg: 1.7
+      葉酸_mcg_DFE: 283.3
+      ビタミンB12_mcg: 75.0
+      ビオチン_mcg: 66.7
+      パントテン酸_mg: 68.8
+      コリン_mg: 5.8
+      カルシウム_mg: 38.3
+      ヨウ素_mcg: 37.5
+      マグネシウム_mg: 30.0
+      亜鉛_mg: 5.0
+      セレン_mcg: 33.3
+      銅_mg: 0.3
+      マンガン_mg: 1.0
+      クロム_mcg: 33.3
+      リコピン_mg: 2.5
+      ほう素_mg: 0.5
 
-  magnesium_night:
-    name: "マグネシウム（Night）"
-    type: "base"
-    ingredients:
-      マグネシウム_mg: 250
-
-  protein_shake:
-    name: "プロテインシェイク"
-    type: "base"
-    ingredients:
-      プロテイン_g: 25
-      ロイシン_mg: 2700
-
-  bcaa:
-    name: "BCAA"
+  coq10_ubiquinol:
+    name: "CoQ10（Life Extension Ubiquinol）"
     type: "optional"
+    unit_type: "ソフトジェル"
+    default_quantity: 1
     ingredients:
-      BCAA_mg: 5000
+      CoQ10_mg: 100
+
+  omega3_ultimate:
+    name: "オメガ3（Nordic Naturals Ultimate Omega）"
+    type: "optional"
+    unit_type: "ソフトジェル"
+    default_quantity: 2
+    ingredients:
+      オメガ3_mg: 640
+
+  vitamin_d3_k2_oil:
+    name: "ビタミンD3+K2 オイルドロップ（Thorne）"
+    type: "optional"
+    unit_type: "滴"
+    default_quantity: 2
+    ingredients:
+      ビタミンD3_IU: 1000
+      ビタミンK2_mcg: 200
+
+  ala_nmn_natural_rainbow:
+    name: "5-ALA & NMN（ナチュラルレインボー）"
+    type: "optional"
+    unit_type: "粒"
+    default_quantity: 1
+    ingredients:
+      5-ALA_mg: 25
+      NMN_mg: 10
+
+
+  miyarisan:
+    name: "強ミヤリサン錠"
+    type: "optional"
+    unit_type: "錠"
+    default_quantity: 3  # 推奨量: 1回9錠、1日3回
+    ingredients:
+      酪酸菌_mg: 30
+
+
+  ebios:
+    name: "エビオス錠"
+    type: "optional"
+    unit_type: "錠"
+    default_quantity: 5  # 推奨量: 1回10錠、1日3回
+    ingredients:
+      乾燥酵母_mg: 255
+      ビタミンB1_mg: 0.072
+      ビタミンB2_mg: 0.02
+      ビタミンB6_mg: 0.017
+      ナイアシン_mg: 0.18
+      葉酸_mcg: 9.2
+      パントテン酸_mg: 0.048
+      ビオチン_mcg: 0.93
+      イノシトール_mg: 1.7
+      コリン_mg: 1.9
+
+
+  zinc_picolinate:
+    name: "亜鉛（Thorne Zinc Picolinate）"
+    type: "optional"
+    unit_type: "カプセル"
+    default_quantity: 1
+    ingredients:
+      亜鉛_mg: 30
+      ケラチン_mg: 70
 
 presets:
   Morning:
     default_items:
       - blend_drink
-      - vitamin_d3
-    default_scale: 1.0
+      - mens_multi_50
+      - vitamin_d3_k2_oil
+      - omega3_ultimate
+      - ala_nmn_natural_rainbow
+      - miyarisan
+      - ebios
+      - zinc_picolinate
 
   Noon:
     default_items:
-      - probiotic
-    default_scale: 1.0
+      - coq10_ubiquinol
+      - omega3_ultimate
 
   Night:
     default_items:
-      - magnesium_night
-    default_scale: 1.0
+      - magnesium_doctors_best
+      
 
   Workout:
     default_items:
-      - protein_shake
-      - bcaa
-    default_scale: 1.0
+      - blend_drink
 
   Anytime:
     default_items: []
-    default_scale: 1.0

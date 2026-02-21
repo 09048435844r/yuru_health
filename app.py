@@ -599,7 +599,6 @@ def main():
             selected_scene = st.selectbox("シーン", options=scene_options, index=0)
             scene_preset = get_scene_preset(selected_scene, supplements)
             default_items = set(scene_preset.get("default_items", []))
-            default_scale = float(scene_preset.get("default_scale", 1.0))
 
             now_jst = datetime.now(JST)
             col_date, col_time = st.columns(2)
@@ -641,8 +640,7 @@ def main():
                     item_type = "optional"
                 grouped_items[item_type].append((item_id, item))
 
-            scale_options = [x / 10 for x in range(5, 16)]
-            selected_item_scales = {}
+            selected_item_quantities = {}
 
             for item_type, label in (("base", "🧱 ベース"), ("optional", "✨ オプション")):
                 items = grouped_items.get(item_type, [])
@@ -651,24 +649,40 @@ def main():
                 st.markdown(f"**{label}**")
                 for item_id, item in items:
                     item_name = item.get("name", item_id)
+                    unit_type = str(item.get("unit_type", "回") or "回")
+                    default_quantity = item.get("default_quantity", 1.0)
+                    try:
+                        default_quantity = max(0.0, float(default_quantity))
+                    except (TypeError, ValueError):
+                        default_quantity = 1.0
                     checked = st.checkbox(
                         item_name,
                         value=item_id in default_items,
                         key=f"intake_chk_{selected_scene}_{item_id}",
                     )
                     if checked:
-                        ratio_default = default_scale if item_id in default_items else 1.0
-                        ratio = st.select_slider(
-                            f"{item_name} の摂取倍率",
-                            options=scale_options,
-                            value=ratio_default,
-                            format_func=lambda v: f"{int(v * 100)}%",
-                            key=f"intake_scale_{selected_scene}_{item_id}",
-                        )
-                        selected_item_scales[item_id] = ratio
+                        if unit_type in {"錠", "粒", "カプセル", "ソフトジェル"}:
+                            quantity = st.number_input(
+                                f"{item_name} の数量（{unit_type}）",
+                                min_value=0,
+                                max_value=20,
+                                value=int(round(default_quantity)),
+                                step=1,
+                                key=f"intake_qty_{selected_scene}_{item_id}",
+                            )
+                        else:
+                            quantity = st.number_input(
+                                f"{item_name} の数量（{unit_type}）",
+                                min_value=0.0,
+                                max_value=20.0,
+                                value=float(default_quantity),
+                                step=0.5,
+                                key=f"intake_qty_{selected_scene}_{item_id}",
+                            )
+                        selected_item_quantities[item_id] = float(quantity)
 
-            snapshot_payload = build_intake_snapshot(items_master, selected_item_scales)
-            if selected_item_scales:
+            snapshot_payload = build_intake_snapshot(items_master, selected_item_quantities)
+            if selected_item_quantities:
                 with st.expander("🧪 スナップショット確認", expanded=False):
                     total_nutrients = snapshot_payload.get("total_nutrients", {})
                     nutrient_rows = [
@@ -695,7 +709,7 @@ def main():
             )
 
             if st.button("✅ 記録する", type="primary", use_container_width=True, key="save_intake_log"):
-                if not selected_item_scales:
+                if not selected_item_quantities:
                     st.error("保存するには最低1アイテムを選択してください。")
                 else:
                     db_manager.insert_intake_log(

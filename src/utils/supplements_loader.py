@@ -28,7 +28,6 @@ def get_scene_preset(scene: str, supplements: Dict[str, Any]) -> Dict[str, Any]:
         preset = {}
     return {
         "default_items": preset.get("default_items", []) or [],
-        "default_scale": float(preset.get("default_scale", 1.0) or 1.0),
     }
 
 
@@ -48,13 +47,13 @@ def _round_amount(value: float) -> float:
 
 def build_intake_snapshot(
     items_master: Dict[str, Any],
-    selected_item_scales: Dict[str, float],
+    selected_item_quantities: Dict[str, float],
 ) -> Dict[str, Any]:
-    """Build immutable snapshot payload from selected item scales."""
+    """Build immutable snapshot payload from selected item quantities."""
     snapshot_items: List[Dict[str, Any]] = []
     total_nutrients: Dict[str, float] = {}
 
-    for item_id, scale in selected_item_scales.items():
+    for item_id, quantity in selected_item_quantities.items():
         item = items_master.get(item_id, {}) if isinstance(items_master, dict) else {}
         if not isinstance(item, dict):
             continue
@@ -63,13 +62,14 @@ def build_intake_snapshot(
         if not isinstance(base_ingredients, dict):
             continue
 
-        ratio = max(0.5, min(1.5, float(scale)))
+        quantity_value = max(0.0, float(quantity))
+        unit_type = str(item.get("unit_type", "回") or "回")
         scaled_ingredients: Dict[str, float] = {}
 
         for nutrient_key, amount in base_ingredients.items():
             if not isinstance(amount, (int, float)):
                 continue
-            scaled_amount = _round_amount(float(amount) * ratio)
+            scaled_amount = _round_amount(float(amount) * quantity_value)
             scaled_ingredients[nutrient_key] = scaled_amount
             total_nutrients[nutrient_key] = _round_amount(
                 float(total_nutrients.get(nutrient_key, 0)) + float(scaled_amount)
@@ -79,7 +79,8 @@ def build_intake_snapshot(
             {
                 "item_id": item_id,
                 "name": item.get("name", item_id),
-                "scale": ratio,
+                "quantity": quantity_value,
+                "unit_type": unit_type,
                 "ingredients": scaled_ingredients,
             }
         )

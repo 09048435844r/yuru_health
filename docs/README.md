@@ -13,7 +13,7 @@ YuruHealth の運用・連携ドキュメント一覧です。
 - [Operations Playbook](./OPERATIONS_PLAYBOOK.md)
   - 日次運用、障害時の切り分け、確認コマンド
 - [Intake Logging 運用マニュアル](./operations_intake_logging.md)
-  - 摂取ログのGitOps運用、YAML変更手順、プリセット/成分更新
+  - 摂取ログのGitOps運用、YAML変更手順、プリセット/成分更新（1単位あたり + `default_quantity` モデル）
 - [Secrets & Config Guide](./SECRETS_CONFIGURATION.md)
   - `secrets_loader` 優先順位、ローカル/CI/Cloud の設定指針
 
