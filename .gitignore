@@ -10,6 +10,9 @@ ENV/
 build/
 develop-eggs/
 dist/
+!dist/
+dist/*
+!dist/.env.production
 downloads/
 eggs/
 .eggs/

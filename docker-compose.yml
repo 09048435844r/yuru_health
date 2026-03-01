@@ -1,0 +1,51 @@
+version: "3.9"
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: yuruhealth_app
+    restart: unless-stopped
+    env_file:
+      - dist/.env.production
+    environment:
+      TZ: ${TZ:-Asia/Tokyo}
+      PYTHONUNBUFFERED: ${PYTHONUNBUFFERED:-1}
+    ports:
+      - "8501:8501"
+    command: >
+      streamlit run app.py
+      --server.port=8501
+      --server.address=0.0.0.0
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8501/_stcore/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: yuruhealth_worker
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_started
+    env_file:
+      - dist/.env.production
+    environment:
+      TZ: ${TZ:-Asia/Tokyo}
+      PYTHONUNBUFFERED: ${PYTHONUNBUFFERED:-1}
+      FETCH_INTERVAL_SECONDS: ${FETCH_INTERVAL_SECONDS:-900}
+    command: >
+      /bin/sh -lc '
+      while true; do
+        echo "[worker] $(date -Iseconds) start fetch";
+        python -m src.main --auto;
+        rc=$?;
+        echo "[worker] $(date -Iseconds) done rc=$rc";
+        sleep "${FETCH_INTERVAL_SECONDS}";
+      done'
