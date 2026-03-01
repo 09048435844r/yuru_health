@@ -9,6 +9,7 @@ import argparse
 import logging
 import sys
 from datetime import datetime, timedelta, timezone
+from typing import Callable, Optional
 
 JST = timezone(timedelta(hours=9))
 
@@ -19,9 +20,10 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 USER_ID = "user_001"
+DEFAULT_BOOTSTRAP_DAYS = 30
 
 
-def _run_fetcher(name: str, func):
+def _run_fetcher(name: str, func: Callable[[], object]) -> object:
     """Fetcher を実行し、失敗時は詳細ログを出して例外を再送出する。"""
     try:
         result = func()
@@ -31,6 +33,47 @@ def _run_fetcher(name: str, func):
         raise
 
 
+def _parse_latest_date(value: Optional[str]) -> Optional[datetime.date]:
+    """DB から取得した日時文字列を date に正規化する。"""
+    if not value:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+
+    if text.endswith("Z"):
+        text = text.replace("Z", "+00:00")
+
+    try:
+        return datetime.fromisoformat(text).date()
+    except ValueError:
+        pass
+
+    try:
+        return datetime.strptime(text[:10], "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def _resolve_start_date(
+    latest_value: Optional[str],
+    end_dt: datetime,
+    bootstrap_days: int = DEFAULT_BOOTSTRAP_DAYS,
+) -> str:
+    """最新日付の翌日を開始日にし、未登録時は bootstrap_days 分遡る。"""
+    latest_date = _parse_latest_date(latest_value)
+    if latest_date:
+        start_date = latest_date + timedelta(days=1)
+    else:
+        start_date = (end_dt - timedelta(days=bootstrap_days)).date()
+
+    end_date = end_dt.date()
+    if start_date > end_date:
+        start_date = end_date
+
+    return start_date.strftime("%Y-%m-%d")
+
+
 def run_all_fetchers():
     """すべての Fetcher を実行し、Supabase へ保存する"""
     from src.database_manager import DatabaseManager
@@ -38,9 +81,21 @@ def run_all_fetchers():
     db_manager = DatabaseManager()
 
     end_dt = datetime.now(JST)
-    start_dt = end_dt - timedelta(days=7)
-    start_str = start_dt.strftime("%Y-%m-%d")
     end_str = end_dt.strftime("%Y-%m-%d")
+
+    oura_start_str = _resolve_start_date(db_manager.get_latest_oura_measured_at(USER_ID), end_dt)
+    withings_start_str = _resolve_start_date(db_manager.get_latest_weight_measured_at(USER_ID), end_dt)
+    google_fit_start_str = _resolve_start_date(db_manager.get_latest_google_fit_date(USER_ID), end_dt)
+
+    logger.info(
+        "backfill window | Oura:%s..%s | Withings:%s..%s | GoogleFit:%s..%s",
+        oura_start_str,
+        end_str,
+        withings_start_str,
+        end_str,
+        google_fit_start_str,
+        end_str,
+    )
 
     results = {}
 
@@ -50,7 +105,7 @@ def run_all_fetchers():
         fetcher = OuraFetcher({}, db_manager=db_manager)
         if not fetcher.authenticate():
             return "skip"
-        data = fetcher.fetch_data(USER_ID, start_str, end_str)
+        data = fetcher.fetch_data(USER_ID, oura_start_str, end_str)
         saved = 0
         for record in data:
             db_manager.insert_oura_data(
@@ -78,7 +133,7 @@ def run_all_fetchers():
         except OAuthRefreshError as e:
             raise RuntimeError(f"Withings OAuth failed: {e}") from e
         fetcher = WithingsFetcher({}, withings_oauth, db_manager=db_manager)
-        data = fetcher.fetch_data(USER_ID, start_str, end_str)
+        data = fetcher.fetch_data(USER_ID, withings_start_str, end_str)
         saved = 0
         for record in data:
             db_manager.insert_weight_data(
@@ -137,7 +192,7 @@ def run_all_fetchers():
         except OAuthRefreshError as e:
             raise RuntimeError(f"Google OAuth failed: {e}") from e
         gfit = GoogleFitFetcher(creds, db_manager=db_manager)
-        fit_data = gfit.fetch_all(USER_ID, start_str, end_str)
+        fit_data = gfit.fetch_all(USER_ID, google_fit_start_str, end_str)
         saved = 0
         for records in fit_data.values():
             for record in records:
@@ -169,7 +224,10 @@ def main():
     parser.add_argument("--auto", action="store_true", help="Run all fetchers automatically")
     args = parser.parse_args()
 
-    if args.auto:
+    # 引数なしでも既定で auto 実行（ラズパイ定期実行を簡素化）
+    should_run_auto = args.auto or len(sys.argv) == 1
+
+    if should_run_auto:
         try:
             run_all_fetchers()
         except Exception:

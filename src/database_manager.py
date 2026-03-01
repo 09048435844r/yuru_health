@@ -82,6 +82,20 @@ class DatabaseManager:
             query = query.eq("user_id", user_id)
         response = query.execute()
         return response.data
+
+    def get_latest_weight_measured_at(self, user_id: str = "user_001") -> Optional[str]:
+        response = (
+            self.supabase.table("weight_data")
+            .select("measured_at")
+            .eq("user_id", user_id)
+            .order("measured_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        if not response.data:
+            return None
+        measured_at = response.data[0].get("measured_at")
+        return str(measured_at) if measured_at else None
     
     def insert_oura_data(self, user_id: str, measured_at: str, activity_score: Optional[int], 
                         sleep_score: Optional[int], readiness_score: Optional[int], 
@@ -112,6 +126,20 @@ class DatabaseManager:
             query = query.eq("user_id", user_id)
         response = query.execute()
         return response.data
+
+    def get_latest_oura_measured_at(self, user_id: str = "user_001") -> Optional[str]:
+        response = (
+            self.supabase.table("oura_data")
+            .select("measured_at")
+            .eq("user_id", user_id)
+            .order("measured_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        if not response.data:
+            return None
+        measured_at = response.data[0].get("measured_at")
+        return str(measured_at) if measured_at else None
     
     def insert_environmental_log(self, timestamp: str, source: str, 
                                   latitude: Optional[float], longitude: Optional[float],
@@ -177,6 +205,20 @@ class DatabaseManager:
             query = query.eq("data_type", data_type)
         response = query.execute()
         return response.data
+
+    def get_latest_google_fit_date(self, user_id: str = "user_001") -> Optional[str]:
+        response = (
+            self.supabase.table("google_fit_data")
+            .select("date")
+            .eq("user_id", user_id)
+            .order("date", desc=True)
+            .limit(1)
+            .execute()
+        )
+        if not response.data:
+            return None
+        latest_date = response.data[0].get("date")
+        return str(latest_date) if latest_date else None
 
     def insert_intake_log(
         self,
