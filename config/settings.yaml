@@ -12,3 +12,12 @@ gemini:
 # Withings 設定（非機密部分のみ）
 withings:
   redirect_uri: "http://localhost:8501/callback"
+
+google_fit:
+  sleep_parser:
+    source_policy: "min" # min / max / oura / shealth / healthsync / prefer:<packageName>
+    min_candidate_minutes: 120
+    awake_keywords:
+      - "awake"
+      - "wake"
+      - "覚醒"

@@ -155,7 +155,7 @@ def _google_fit_badge(badge: dict) -> str:
     if slp is not None:
         hrs = slp // 60
         mins = slp % 60
-        parts.append(f'<span class="fp-badge" style="background:#7E57C2;color:#fff;border-radius:8px;padding:1px 5px;font-size:10px;font-weight:600">😴{hrs}h{mins:02d}</span>')
+        parts.append(f'<span class="fp-badge" style="background:#7E57C2;color:#fff;border-radius:8px;padding:1px 5px;font-size:10px;font-weight:600">😴{hrs}:{mins:02d}</span>')
     if not parts:
         return _has_data_dot()
     return f'<div style="display:flex;flex-direction:column;align-items:center;gap:1px">{"".join(parts)}</div>'

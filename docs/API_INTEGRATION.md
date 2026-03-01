@@ -177,6 +177,36 @@ oura:
 - 復旧後は `python -m src.main --auto` が `exit code 0` になることを確認してください
 - 詳細手順は [Google Fit OAuth 復旧・運用 Runbook](./GOOGLE_FIT_OAUTH_RUNBOOK.md) を参照
 
+#### 睡眠時間が異常に長い（重複計上）
+
+- 症状例: 1日 `16〜22時間` の睡眠として保存される
+- 対応: parser-only 再集計を実行
+
+```bash
+python -m src.main --parse-only --days 7
+```
+
+現在の Google Fit 睡眠パーサーは以下を実施します:
+
+- セッション区間の Union（重複時間を二重加算しない）
+- `awake_keywords` 一致区間の差し引き
+- 複数アプリ候補から `source_policy` で1ソース採用
+
+`config/settings.yaml` の調整例:
+
+```yaml
+google_fit:
+  sleep_parser:
+    source_policy: "min" # min / max / oura / shealth / healthsync / prefer:<packageName>
+    min_candidate_minutes: 120
+    awake_keywords: ["awake", "wake", "覚醒"]
+```
+
+UI 確認ポイント:
+
+- 「🏃 Google Fit データ」内の睡眠表は `h:mm` 表示
+- `採用ソース` 列で `raw_data.chosen_app` を確認可能
+
 ### データベース関連
 
 #### 「テーブルが存在しません」

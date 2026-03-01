@@ -41,6 +41,15 @@ python -m src.main --auto
 - `exit code 0`: 正常
 - `exit code 1`: fail-fast により異常検知（要原因調査）
 
+補足（Google Fit 睡眠の再集計）:
+
+```bash
+python -m src.main --parse-only --days 7
+```
+
+- 外部API取得は行わず、`raw_data_lake` から parsed テーブルを再構築
+- Google Fit 睡眠は Union + Awake除外 + source_policy で再計算
+
 ---
 
 ## 3. 障害種別ごとの切り分け
@@ -87,6 +96,11 @@ Google Fit の詳細は:
 確認:
 - latest が進んでいるか
 - 件数が必要範囲で増えているか
+
+Google Fit 睡眠の追加確認:
+
+- `google_fit_data.data_type='sleep'` の `raw_data.chosen_app` が入っているか
+- 値が常識範囲（目安: 240〜600分）か
 
 ---
 

@@ -19,6 +19,16 @@ gemini:
 withings:
   redirect_uri: "http://localhost:8501/callback"
 
+# Google Fit 睡眠パーサー設定（raw_data_lake -> google_fit_data の再集計時に利用）
+google_fit:
+  sleep_parser:
+    source_policy: "min" # min / max / oura / shealth / healthsync / prefer:<packageName>
+    min_candidate_minutes: 120
+    awake_keywords:
+      - "awake"
+      - "wake"
+      - "覚醒"
+
 # ── ハッシュガード設定 (参考情報) ──
 # DatabaseManager._VOLATILE_KEYS で定義されている除外キー:
 #   dt, t, time, timestamp, ts, server_time,

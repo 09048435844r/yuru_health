@@ -35,6 +35,8 @@
 | **Gemini AI Deep Insight** | 生データを横断分析し、摂取ログ日次サマリーも加味して示唆を出す AI 機能 |
 | **Intake Logging (YAML Master + Snapshot)** | `config/supplements.yaml` をマスターとして、記録時の成分計算結果を `intake_logs.snapshot_payload` に不変スナップショット保存 |
 | **Fail-fast Data Pipeline** | OAuth トークン失効・認証異常・Fetcher 例外を握りつぶさず即時失敗（非ゼロ終了）で検知可能 |
+| **Parse-only Rebuild** | `python -m src.main --parse-only --days N` で `raw_data_lake` から parsed テーブルを再構築 |
+| **Google Fit Sleep Normalizer** | 睡眠を Union + Awake 除外 + source_policy で正規化し、`chosen_app` を保存 |
 | **Raw Data View** | サイドバーのチェックボックスで `raw_data_lake` 最新 100 件を表示 |
 | **Data Lake** | 全ソースの生 JSON を `raw_data_lake` に一元保存 |
 
@@ -155,6 +157,9 @@ streamlit run app.py
 
 # CLI で手動取得
 python -m src.main --auto
+
+# raw_data_lake から再パース（外部API取得なし）
+python -m src.main --parse-only --days 7
 ```
 
 ### 2. 環境変数 (推奨)
@@ -281,6 +286,7 @@ CREATE INDEX IF NOT EXISTS idx_intake_logs_user_timestamp
 ```
 
 補足: `docs/schema/intake_logs.sql` を intake_logs の参照DDL（source of truth）として運用してください。
+Google Fit の `data_type='sleep'` における `raw_data` 補足は `docs/schema/google_fit_data.md` を参照してください。
 
 ## 🧪 開発・テスト (Development & Testing)
 

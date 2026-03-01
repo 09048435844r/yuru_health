@@ -1,8 +1,10 @@
 import logging
+import json
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime, timedelta, timezone
+from typing import Any, Dict
 
 JST = timezone(timedelta(hours=9))
 
@@ -110,6 +112,212 @@ def fetch_latest_data(db_manager: DatabaseManager, user_id: str = "user_001"):
         "latest_weight": latest_weight,
         "latest_oura": latest_oura
     }
+
+
+def _to_jst_date_text(value: Any) -> str:
+    """DB時刻(UTC/naive/aware)をJSTに変換して YYYY-MM-DD を返す。"""
+    if value is None:
+        return ""
+    text = str(value).strip()
+    if not text:
+        return ""
+    try:
+        dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return text[:10] if len(text) >= 10 else ""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(JST).strftime("%Y-%m-%d")
+
+
+def _to_jst_hour(value: Any) -> int:
+    if value is None:
+        return 0
+    text = str(value).strip()
+    if not text:
+        return 0
+    try:
+        dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return 0
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(JST).hour
+
+
+def _minutes_to_hhmm(value: Any) -> str:
+    try:
+        total = int(value)
+    except (TypeError, ValueError):
+        return "0:00"
+    if total < 0:
+        total = 0
+    hours = total // 60
+    mins = total % 60
+    return f"{hours}:{mins:02d}"
+
+
+def _extract_sleep_chosen_app(raw_data: Any) -> str:
+    payload: Dict[str, Any] = {}
+    if isinstance(raw_data, dict):
+        payload = raw_data
+    elif isinstance(raw_data, str):
+        try:
+            obj = json.loads(raw_data)
+            if isinstance(obj, dict):
+                payload = obj
+        except Exception:
+            return "-"
+    app = payload.get("chosen_app")
+    return str(app) if app else "-"
+
+
+def _get_google_fit_sleep_policy() -> str:
+    try:
+        settings = load_settings()
+        parser_cfg = ((settings.get("google_fit") or {}).get("sleep_parser") or {}) if isinstance(settings, dict) else {}
+        policy = str(parser_cfg.get("source_policy") or "min").strip()
+        return policy or "min"
+    except Exception:
+        return "min"
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def load_footprint_from_parsed_tables(_db_manager: DatabaseManager, days: int = 7, user_id: str = "user_001") -> Dict[tuple, Dict[str, Any]]:
+    """サイドバー足跡用に、parsedテーブルの最新DB値を直接読み込んで source×date 辞書を構築する。"""
+    start_jst = (datetime.now(JST) - timedelta(days=max(0, days))).strftime("%Y-%m-%d")
+
+    rich_history: Dict[tuple, Dict[str, Any]] = {}
+
+    # Oura (oura_data)
+    oura_rows = (
+        _db_manager.supabase.table("oura_data")
+        .select("measured_at, sleep_score, activity_score, readiness_score")
+        .eq("user_id", user_id)
+        .gte("measured_at", f"{start_jst}T00:00:00")
+        .order("measured_at")
+        .limit(50000)
+        .execute()
+        .data
+        or []
+    )
+    oura_latest_by_date: Dict[str, Dict[str, Any]] = {}
+    for row in oura_rows:
+        date_text = _to_jst_date_text(row.get("measured_at"))
+        if not date_text:
+            continue
+        oura_latest_by_date[date_text] = row
+    for date_text, row in oura_latest_by_date.items():
+        rich_history[("oura", date_text)] = {
+            "has_data": True,
+            "badge": {
+                "sleep_score": row.get("sleep_score"),
+                "activity_score": row.get("activity_score"),
+                "readiness_score": row.get("readiness_score"),
+            },
+        }
+
+    # Withings (weight_data)
+    withings_rows = (
+        _db_manager.supabase.table("weight_data")
+        .select("measured_at, weight_kg")
+        .eq("user_id", user_id)
+        .gte("measured_at", f"{start_jst}T00:00:00")
+        .order("measured_at")
+        .limit(50000)
+        .execute()
+        .data
+        or []
+    )
+    withings_latest_by_date: Dict[str, Dict[str, Any]] = {}
+    for row in withings_rows:
+        date_text = _to_jst_date_text(row.get("measured_at"))
+        if not date_text:
+            continue
+        withings_latest_by_date[date_text] = row
+    for date_text, row in withings_latest_by_date.items():
+        rich_history[("withings", date_text)] = {
+            "has_data": True,
+            "badge": {"weight_kg": row.get("weight_kg")},
+        }
+
+    # Google Fit (google_fit_data)
+    gfit_rows = (
+        _db_manager.supabase.table("google_fit_data")
+        .select("date, data_type, value")
+        .eq("user_id", user_id)
+        .gte("date", start_jst)
+        .order("date")
+        .limit(50000)
+        .execute()
+        .data
+        or []
+    )
+    gfit_badge_by_date: Dict[str, Dict[str, Any]] = {}
+    for row in gfit_rows:
+        date_text = _to_jst_date_text(row.get("date"))
+        if not date_text:
+            continue
+        badge = gfit_badge_by_date.setdefault(date_text, {})
+        data_type = str(row.get("data_type") or "")
+        value = row.get("value")
+        if data_type == "steps" and value is not None:
+            badge["steps"] = int(badge.get("steps", 0)) + int(value)
+        elif data_type == "weight" and value is not None:
+            badge["weight_kg"] = round(float(value), 1)
+        elif data_type == "sleep" and value is not None:
+            badge["sleep_min"] = int(badge.get("sleep_min", 0)) + int(value)
+    for date_text, badge in gfit_badge_by_date.items():
+        rich_history[("google_fit", date_text)] = {
+            "has_data": True,
+            "badge": badge,
+        }
+
+    # Environment (environmental_logs): source に応じて Weather / SwitchBot を分離
+    env_rows = (
+        _db_manager.supabase.table("environmental_logs")
+        .select("timestamp, source, temp, humidity, pressure, raw_data")
+        .gte("timestamp", f"{start_jst}T00:00:00")
+        .order("timestamp")
+        .limit(50000)
+        .execute()
+        .data
+        or []
+    )
+    env_by_source_date: Dict[tuple, Dict[str, Any]] = {}
+    for row in env_rows:
+        date_text = _to_jst_date_text(row.get("timestamp"))
+        if not date_text:
+            continue
+        source_value = str(row.get("source") or "").strip().lower()
+        footprint_source = "switchbot" if source_value == "switchbot" else "weather"
+        key = (footprint_source, date_text)
+        bucket = env_by_source_date.setdefault(key, {"timeseries": []})
+        raw_data = row.get("raw_data") if isinstance(row.get("raw_data"), dict) else {}
+        bucket["timeseries"].append(
+            {
+                "hour": _to_jst_hour(row.get("timestamp")),
+                "temp": row.get("temp"),
+                "humidity": row.get("humidity"),
+                "pressure": row.get("pressure"),
+                "co2": raw_data.get("CO2"),
+            }
+        )
+
+    for (footprint_source, date_text), bucket in env_by_source_date.items():
+        ts = bucket.get("timeseries", [])
+        summary: Dict[str, Any] = {}
+        for field in ("temp", "humidity", "pressure", "co2"):
+            values = [p[field] for p in ts if p.get(field) is not None]
+            if values:
+                summary[f"{field}_avg"] = round(sum(values) / len(values), 1)
+        rich_history[(footprint_source, date_text)] = {
+            "has_data": True,
+            "timeseries": ts,
+            "summary": summary,
+        }
+
+    return rich_history
 
 
 def refresh_data(db_manager: DatabaseManager, user_id: str = "user_001"):
@@ -242,6 +450,7 @@ def refresh_data(db_manager: DatabaseManager, user_id: str = "user_001"):
                 logger.info(f"SwitchBot fetch error: {e}")
         
         logger.info("=== refresh_data completed ===")
+        load_footprint_from_parsed_tables.clear()
         st.success("✅ データを更新しました")
         st.rerun()
     except Exception as e:
@@ -400,17 +609,9 @@ def main():
             refresh_data(db_manager)
 
     st.markdown("### 👣 記録の足跡（直近7日）")
-    rich_history = db_manager.get_data_arrival_rich(days=30)
-    footprint_keys_df = pd.DataFrame(
-        [{"source": source, "fetched_date": fetched_date} for (source, fetched_date) in rich_history.keys()]
-    )
-    if not footprint_keys_df.empty:
-        recent_dates = (
-            footprint_keys_df.sort_values("fetched_date")["fetched_date"]
-            .drop_duplicates()
-            .tail(7)
-            .tolist()
-        )
+    rich_history = load_footprint_from_parsed_tables(db_manager, days=7, user_id="user_001")
+    if rich_history:
+        recent_dates = sorted({fetched_date for (_, fetched_date) in rich_history.keys()})[-7:]
         rich_history_recent = {
             k: v for k, v in rich_history.items()
             if k[1] in recent_dates
@@ -620,11 +821,18 @@ def main():
                     st.bar_chart(df_steps.set_index("date")["value"], use_container_width=True)
 
                 if gfit_sleep:
-                    st.markdown("**😴 睡眠時間 (直近7日, 分)**")
+                    st.markdown("**😴 睡眠時間 (直近7日, h:mm)**")
+                    st.caption(f"source policy: {_get_google_fit_sleep_policy()}")
                     df_sleep = pd.DataFrame(gfit_sleep)
                     df_sleep["date"] = pd.to_datetime(df_sleep["date"])
                     df_sleep = df_sleep.sort_values("date")
-                    st.bar_chart(df_sleep.set_index("date")["value"], use_container_width=True)
+                    df_sleep["sleep_hhmm"] = df_sleep["value"].apply(_minutes_to_hhmm)
+                    df_sleep["source"] = df_sleep.get("raw_data", pd.Series([None] * len(df_sleep))).apply(_extract_sleep_chosen_app)
+                    st.dataframe(
+                        df_sleep[["date", "sleep_hhmm", "source"]].rename(columns={"date": "日付", "sleep_hhmm": "睡眠", "source": "採用ソース"}),
+                        use_container_width=True,
+                        hide_index=True,
+                    )
 
                 if st.button("🚪 Google Fit ログアウト"):
                     google_oauth.logout()

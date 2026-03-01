@@ -116,7 +116,68 @@ PY
 
 ---
 
-## 6) 運用ポリシー（推奨）
+## 6) 睡眠データ異常値（過大計上）復旧手順
+
+Google Fit の睡眠が `16〜22時間` のように過大計上される場合は、
+`raw_data_lake` から再パースして `google_fit_data` を正規化します。
+
+```bash
+python -m src.main --parse-only --days 7
+```
+
+実装上の正規化ルール:
+
+- セッション重複は日次(JST)で interval union
+- `awake_keywords` に一致する区間は差し引き
+- 複数アプリ由来の重複は `source_policy` で 1 ソース採用
+
+### 正規化結果の確認（Read-Only）
+
+```bash
+python - <<'PY'
+from src.database_manager import DatabaseManager
+DB=DatabaseManager('config/secrets.yaml')
+rows=(DB.supabase.table('google_fit_data')
+      .select('date,value,raw_data')
+      .eq('user_id','user_001')
+      .eq('data_type','sleep')
+      .order('date', desc=True)
+      .limit(7)
+      .execute().data or [])
+for r in rows:
+    raw = r.get('raw_data') if isinstance(r.get('raw_data'), dict) else {}
+    print(r.get('date'), r.get('value'), raw.get('chosen_app'), raw.get('source_policy'))
+PY
+```
+
+判定基準:
+
+- `value` が常識的な範囲（例: 240〜600分）に収まる
+- `raw_data.chosen_app` が保存されている
+- `raw_data.source_policy` が設定値と一致する
+
+---
+
+## 7) sleep_parser 設定（config/settings.yaml）
+
+`config/settings.yaml` で睡眠ソース選定ポリシーを調整できます。
+
+```yaml
+google_fit:
+  sleep_parser:
+    source_policy: "min" # min / max / oura / shealth / healthsync / prefer:<packageName>
+    min_candidate_minutes: 120
+    awake_keywords: ["awake", "wake", "覚醒"]
+```
+
+- `min`: 候補のうち最小値を採用（過大計上を抑制）
+- `max`: 候補のうち最大値を採用
+- `oura` など: 特定アプリを優先
+- `prefer:<packageName>`: パッケージ名を直接指定
+
+---
+
+## 8) 運用ポリシー（推奨）
 
 ### 推奨（A）
 
@@ -131,10 +192,11 @@ PY
 
 ---
 
-## 7) 既知の実装上の保証
+## 9) 既知の実装上の保証
 
 - OAuth失敗は fail-fast で検知（非ゼロ終了）
 - Silent skip（例外握りつぶし）は排除済み
+- 睡眠再パースは Union + Awake除外 + source_policy 適用
 
 関連実装:
 
@@ -142,14 +204,19 @@ PY
 - `auth/google_oauth.py`
 - `src/fetchers/google_fit_fetcher.py`
 - `src/main.py`
+- `config/settings.yaml`
+- `app.py`
 
 ---
 
-## 8) 参考コマンド
+## 10) 参考コマンド
 
 ```bash
 # バッチ実行
 python -m src.main --auto
+
+# parser-only 再集計
+python -m src.main --parse-only --days 7
 
 # Streamlit UI
 streamlit run app.py
