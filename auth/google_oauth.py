@@ -1,4 +1,8 @@
 import logging
+import base64
+import hashlib
+import secrets
+from datetime import datetime, timedelta, timezone
 import streamlit as st
 from typing import Dict, Any, Optional
 from src.utils.secrets_loader import load_secrets
@@ -22,6 +26,9 @@ class GoogleOAuth:
         "https://www.googleapis.com/auth/fitness.sleep.read",
     ]
     PROVIDER = "google"
+    OAUTH_PENDING_KEY = "google_oauth_pending"
+    OAUTH_PENDING_PROVIDER = "google_pkce_pending"
+    OAUTH_PENDING_TTL_MINUTES = 15
     
     def __init__(self, db_manager, secrets_path: str = "config/secrets.yaml", user_id: str = "user_001"):
         self.db_manager = db_manager
@@ -131,6 +138,74 @@ class GoogleOAuth:
             self.db_manager.save_token(self.user_id, self.PROVIDER, self._credentials_to_dict(creds))
         except Exception:
             pass
+
+    def _normalize_redirect_uri(self, uri: str) -> str:
+        """redirect URI を正規化する。localhost は末尾スラッシュを付与する。"""
+        normalized = str(uri or "").strip()
+        if not normalized:
+            return ""
+        if "localhost" in normalized and not normalized.endswith("/"):
+            return normalized + "/"
+        return normalized
+
+    def _generate_pkce_pair(self) -> tuple[str, str]:
+        """PKCE 用の code_verifier / code_challenge(S256) を生成する。"""
+        verifier = secrets.token_urlsafe(64)
+        challenge = base64.urlsafe_b64encode(
+            hashlib.sha256(verifier.encode("utf-8")).digest()
+        ).decode("utf-8").rstrip("=")
+        return verifier, challenge
+
+    def _save_pending_oauth(self, pending: Dict[str, Any]) -> None:
+        try:
+            self.db_manager.save_token(self.user_id, self.OAUTH_PENDING_PROVIDER, pending)
+        except Exception as e:
+            logger.warning(f"Google pending oauth save failed: {e}")
+
+    def _load_pending_oauth(self) -> Optional[Dict[str, Any]]:
+        try:
+            pending = self.db_manager.get_token(self.user_id, self.OAUTH_PENDING_PROVIDER)
+        except Exception as e:
+            logger.warning(f"Google pending oauth load failed: {e}")
+            return None
+
+        if not isinstance(pending, dict):
+            return None
+
+        required = {"state", "code_verifier", "redirect_uri", "auth_url"}
+        if not required.issubset(pending.keys()):
+            return None
+
+        expires_at = pending.get("expires_at")
+        if expires_at:
+            try:
+                expires_dt = datetime.fromisoformat(str(expires_at))
+                if expires_dt.tzinfo is None:
+                    expires_dt = expires_dt.replace(tzinfo=timezone.utc)
+                if datetime.now(timezone.utc) >= expires_dt.astimezone(timezone.utc):
+                    self.clear_pending_oauth()
+                    return None
+            except ValueError:
+                self.clear_pending_oauth()
+                return None
+
+        return pending
+
+    def _get_pending_oauth(self) -> Optional[Dict[str, Any]]:
+        return self._load_pending_oauth()
+
+    def clear_pending_oauth(self):
+        try:
+            self.db_manager.delete_token(self.user_id, self.OAUTH_PENDING_PROVIDER)
+        except Exception as e:
+            logger.warning(f"Google pending oauth delete failed: {e}")
+        st.session_state.pop(self.OAUTH_PENDING_KEY, None)
+        st.session_state.pop("google_oauth_state", None)
+        st.session_state.pop("google_oauth_redirect_uri", None)
+
+    def is_expected_state(self, state: Optional[str]) -> bool:
+        pending = self._get_pending_oauth()
+        return bool(pending and state and state == pending.get("state"))
     
     def _get_redirect_uri(self) -> str:
         """現在の環境に合ったリダイレクトURIを返す"""
@@ -141,14 +216,20 @@ class GoogleOAuth:
                 if host and "localhost" not in host:
                     for uri in self.redirect_uris:
                         if "localhost" not in uri:
-                            return uri
+                            return self._normalize_redirect_uri(uri)
         except Exception:
             pass
         # ローカル環境
+        localhost_uris = [self._normalize_redirect_uri(uri) for uri in self.redirect_uris if "localhost" in uri]
+        localhost_uris = [uri for uri in localhost_uris if uri]
+        if localhost_uris:
+            slash_uris = [uri for uri in localhost_uris if uri.endswith("/")]
+            return slash_uris[0] if slash_uris else localhost_uris[0]
+
         for uri in self.redirect_uris:
             if "localhost" in uri:
-                return uri
-        return self.redirect_uris[0] if self.redirect_uris else ""
+                return self._normalize_redirect_uri(uri)
+        return self._normalize_redirect_uri(self.redirect_uris[0] if self.redirect_uris else "")
     
     def _build_client_config(self) -> Dict[str, Any]:
         """Google OAuth用のクライアント設定を構築"""
@@ -216,7 +297,16 @@ class GoogleOAuth:
     
     def get_authorization_url(self) -> str:
         """認証URLを生成"""
+        if not self.is_available():
+            return ""
+
+        pending = self._get_pending_oauth()
+        if pending:
+            return str(pending.get("auth_url", ""))
+
         redirect_uri = self._get_redirect_uri()
+        state = secrets.token_urlsafe(24)
+        code_verifier, code_challenge = self._generate_pkce_pair()
         flow = Flow.from_client_config(
             self._build_client_config(),
             scopes=self.SCOPES,
@@ -226,24 +316,45 @@ class GoogleOAuth:
             access_type="offline",
             include_granted_scopes="true",
             prompt="consent",
+            state=state,
+            code_challenge=code_challenge,
+            code_challenge_method="S256",
         )
-        st.session_state["google_oauth_state"] = state
-        st.session_state["google_oauth_redirect_uri"] = redirect_uri
+        now_utc = datetime.now(timezone.utc)
+        pending_payload = {
+            "state": state,
+            "code_verifier": code_verifier,
+            "redirect_uri": redirect_uri,
+            "auth_url": auth_url,
+            "created_at": now_utc.isoformat(),
+            "expires_at": (now_utc + timedelta(minutes=self.OAUTH_PENDING_TTL_MINUTES)).isoformat(),
+        }
+        self._save_pending_oauth(pending_payload)
         return auth_url
     
-    def exchange_code_for_token(self, code: str) -> bool:
+    def exchange_code_for_token(self, code: str, state: Optional[str] = None) -> bool:
         """認証コードをトークンに交換"""
         if not GOOGLE_AUTH_AVAILABLE:
             return False
         try:
-            redirect_uri = st.session_state.get("google_oauth_redirect_uri", self._get_redirect_uri())
+            pending = self._get_pending_oauth()
+            if not pending:
+                raise RuntimeError("認証セッションが見つかりません。Google Fit ログインをやり直してください。")
+
+            expected_state = str(pending.get("state", ""))
+            if not state or state != expected_state:
+                raise RuntimeError("state 検証に失敗しました。Google Fit ログインをやり直してください。")
+
+            redirect_uri = str(pending.get("redirect_uri") or self._get_redirect_uri())
             flow = Flow.from_client_config(
                 self._build_client_config(),
                 scopes=self.SCOPES,
                 redirect_uri=redirect_uri,
             )
+            flow.code_verifier = str(pending.get("code_verifier", ""))
             flow.fetch_token(code=code)
             self._save_credentials(flow.credentials)
+            self.clear_pending_oauth()
             return True
         except Exception as e:
             st.error(f"Google認証エラー: {e}")
@@ -252,8 +363,7 @@ class GoogleOAuth:
     def logout(self):
         """認証情報をクリア"""
         st.session_state.pop("google_credentials", None)
-        st.session_state.pop("google_oauth_state", None)
-        st.session_state.pop("google_oauth_redirect_uri", None)
+        self.clear_pending_oauth()
         try:
             self.db_manager.delete_token(self.user_id, self.PROVIDER)
         except Exception:

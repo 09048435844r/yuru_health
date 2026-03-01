@@ -12,7 +12,6 @@ develop-eggs/
 dist/
 !dist/
 dist/*
-!dist/.env.production
 downloads/
 eggs/
 .eggs/
@@ -50,3 +49,4 @@ Thumbs.db
 # Streamlit
 .streamlit/secrets.toml
 .env
+dist/.env.production

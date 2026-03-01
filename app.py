@@ -88,6 +88,14 @@ def get_google_oauth(db_manager):
     return st.session_state["_google_oauth"]
 
 
+def has_oauth_token(db_manager: DatabaseManager, provider: str, user_id: str = "user_001") -> bool:
+    """oauth_tokens テーブルに provider のトークンが存在するかを返す。"""
+    try:
+        return bool(db_manager.get_token(user_id, provider))
+    except Exception:
+        return False
+
+
 def fetch_latest_data(db_manager: DatabaseManager, user_id: str = "user_001"):
     """最新の健康データを取得"""
     weight_data = db_manager.get_weight_data(user_id=user_id, limit=30)
@@ -303,7 +311,17 @@ def main():
         selected_model = st.radio("Gemini モデル", options=available_models, horizontal=True)
 
         with st.expander("🔐 API連携", expanded=False):
-            if withings_oauth.is_authenticated():
+            withings_connected = has_oauth_token(db_manager, "withings")
+            google_connected = has_oauth_token(db_manager, "google")
+            oura_connected = latest_oura is not None
+
+            if oura_connected:
+                st.success("✅ Oura: 連携済み")
+            else:
+                st.warning("⚠️ Oura: データ未取得（トークン設定または取得処理を確認）")
+
+            withings_oauth.sync_tokens_from_db()
+            if withings_connected:
                 st.success("✅ Withings: 認証済み")
                 if st.button("� Withings認証解除"):
                     withings_oauth.clear_tokens()
@@ -317,10 +335,19 @@ def main():
                     st.caption("Withings の client_id が設定されていません")
 
             if google_oauth.is_available():
-                if google_oauth.is_authenticated():
+                google_oauth.ensure_credentials()
+                if google_connected:
                     st.success("✅ Google Fit: 認証済み")
+                    if st.button("🚪 Google Fit ログアウト", key="sidebar_google_logout"):
+                        google_oauth.logout()
+                        st.rerun()
                 else:
                     st.warning("⚠️ Google Fit: 未認証")
+                    st.caption("初回は『Google Fit にログイン』を押して、ブラウザで認証を完了してください。")
+                    auth_url = google_oauth.get_authorization_url()
+                    st.link_button("🔗 Google Fit にログイン", auth_url)
+            else:
+                st.caption("Google Fit の client_id / client_secret が未設定です")
 
         with st.expander("ℹ️ システム情報", expanded=False):
             st.info(f"**環境:** {db_manager.env}")
@@ -404,11 +431,26 @@ def main():
     if google_oauth.is_available():
         google_oauth.ensure_credentials()
         query_params = st.query_params
+        auth_error = query_params.get("error")
         auth_code = query_params.get("code")
-        if auth_code and not google_oauth.is_authenticated():
-            if google_oauth.exchange_code_for_token(auth_code):
+        auth_state = query_params.get("state")
+
+        if auth_error:
+            google_oauth.clear_pending_oauth()
+            st.error(f"Google認証エラー: {auth_error}")
+            st.query_params.clear()
+        elif auth_code:
+            if not google_oauth.is_expected_state(auth_state):
+                google_oauth.clear_pending_oauth()
+                st.error("Google認証エラー: state が一致しません。Google Fit ログインをやり直してください。")
                 st.query_params.clear()
-                st.rerun()
+            elif not google_oauth.is_authenticated():
+                if google_oauth.exchange_code_for_token(auth_code, state=auth_state):
+                    st.query_params.clear()
+                    st.rerun()
+            else:
+                # 既に認証済みの場合は callback パラメータだけ掃除する
+                st.query_params.clear()
 
     # ── タブ化 UI ──
     tab_summary, tab_intake, tab_sleep, tab_weight, tab_env = st.tabs([
@@ -588,9 +630,13 @@ def main():
                     google_oauth.logout()
                     st.rerun()
             else:
-                st.info("Google Fit に接続して、Samsung Health のデータを取得できます。")
-                auth_url = google_oauth.get_authorization_url()
-                st.link_button("🔗 Google Fit にログイン", auth_url)
+                if google_oauth.is_available():
+                    st.info("Google Fit に接続して、Samsung Health のデータを取得できます。")
+                    st.caption("初回のみブラウザ認証が必要です（API連携からも実行できます）。")
+                    auth_url = google_oauth.get_authorization_url()
+                    st.link_button("🔗 Google Fit にログイン", auth_url)
+                else:
+                    st.warning("Google Fit 連携が未設定です。config/secrets.yaml を確認してください。")
 
     with tab_intake:
         st.subheader("🥤 摂取ログ・トラッキング")

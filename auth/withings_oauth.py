@@ -38,6 +38,17 @@ class WithingsOAuth:
         except Exception:
             pass
         self.tokens = tokens
+
+    def sync_tokens_from_db(self):
+        """Supabase の最新トークン状態を self.tokens に同期する。"""
+        self.tokens = self._load_tokens()
+
+    def has_saved_token(self) -> bool:
+        """oauth_tokens に Withings トークンが存在するかを返す。"""
+        try:
+            return bool(self.db_manager.get_token(self.user_id, self.PROVIDER))
+        except Exception:
+            return False
     
     def get_authorization_url(self, state: str = "random_state") -> str:
         params = {
@@ -115,7 +126,10 @@ class WithingsOAuth:
         else:
             raise Exception(f"Token refresh failed: {result}")
     
-    def get_valid_access_token(self, strict: bool = False) -> Optional[str]:
+    def get_valid_access_token(self, strict: bool = False, refresh_from_db: bool = True) -> Optional[str]:
+        if refresh_from_db:
+            self.sync_tokens_from_db()
+
         if not self.tokens:
             if strict:
                 raise OAuthRefreshError("Withings token not found in oauth_tokens")
@@ -141,7 +155,7 @@ class WithingsOAuth:
         return access_token
     
     def is_authenticated(self) -> bool:
-        return self.get_valid_access_token() is not None
+        return self.get_valid_access_token(refresh_from_db=True) is not None
     
     def get_user_id(self) -> Optional[str]:
         return self.tokens.get("user_id")

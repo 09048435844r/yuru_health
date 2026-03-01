@@ -96,6 +96,23 @@ class DatabaseManager:
             return None
         measured_at = response.data[0].get("measured_at")
         return str(measured_at) if measured_at else None
+
+    def get_weight_dates(self, user_id: str, start_date: str, end_date: str) -> set[str]:
+        """指定期間の体重データ日付 (YYYY-MM-DD) を返す。"""
+        response = (
+            self.supabase.table("weight_data")
+            .select("measured_at")
+            .eq("user_id", user_id)
+            .gte("measured_at", f"{start_date}T00:00:00")
+            .lte("measured_at", f"{end_date}T23:59:59")
+            .execute()
+        )
+        dates: set[str] = set()
+        for row in response.data or []:
+            measured_at = row.get("measured_at")
+            if measured_at:
+                dates.add(_to_jst_date(str(measured_at)))
+        return dates
     
     def insert_oura_data(self, user_id: str, measured_at: str, activity_score: Optional[int], 
                         sleep_score: Optional[int], readiness_score: Optional[int], 
@@ -140,8 +157,25 @@ class DatabaseManager:
             return None
         measured_at = response.data[0].get("measured_at")
         return str(measured_at) if measured_at else None
-    
-    def insert_environmental_log(self, timestamp: str, source: str, 
+
+    def get_oura_dates(self, user_id: str, start_date: str, end_date: str) -> set[str]:
+        """指定期間の Oura データ日付 (YYYY-MM-DD) を返す。"""
+        response = (
+            self.supabase.table("oura_data")
+            .select("measured_at")
+            .eq("user_id", user_id)
+            .gte("measured_at", f"{start_date}T00:00:00")
+            .lte("measured_at", f"{end_date}T23:59:59")
+            .execute()
+        )
+        dates: set[str] = set()
+        for row in response.data or []:
+            measured_at = row.get("measured_at")
+            if measured_at:
+                dates.add(_to_jst_date(str(measured_at)))
+        return dates
+
+    def insert_environmental_log(self, timestamp: str, source: str,
                                   latitude: Optional[float], longitude: Optional[float],
                                   weather_summary: Optional[str], temp: Optional[float],
                                   humidity: Optional[int], pressure: Optional[int],
@@ -219,6 +253,23 @@ class DatabaseManager:
             return None
         latest_date = response.data[0].get("date")
         return str(latest_date) if latest_date else None
+
+    def get_google_fit_dates(self, user_id: str, start_date: str, end_date: str) -> set[str]:
+        """指定期間の Google Fit データ日付 (YYYY-MM-DD) を返す。"""
+        response = (
+            self.supabase.table("google_fit_data")
+            .select("date")
+            .eq("user_id", user_id)
+            .gte("date", start_date)
+            .lte("date", end_date)
+            .execute()
+        )
+        dates: set[str] = set()
+        for row in response.data or []:
+            date_value = row.get("date")
+            if date_value:
+                dates.add(str(date_value)[:10])
+        return dates
 
     def insert_intake_log(
         self,
