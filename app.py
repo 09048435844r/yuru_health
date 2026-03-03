@@ -4,7 +4,7 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 JST = timezone(timedelta(hours=9))
 
@@ -20,6 +20,7 @@ from auth.google_oauth import GoogleOAuth
 from src.fetchers.google_fit_fetcher import GoogleFitFetcher
 from src.utils.sparkline import build_footprint_html
 from src.utils.config_loader import load_settings
+from src.utils.system_health_store import ensure_system_health_sample, fetch_system_health_history
 from src.utils.supplements_loader import (
     build_intake_snapshot,
     format_nutrient_label,
@@ -180,6 +181,129 @@ def _get_google_fit_sleep_policy() -> str:
         return policy or "min"
     except Exception:
         return "min"
+
+
+SYSTEM_HEALTH_SAMPLE_INTERVAL_SECONDS = 300
+SYSTEM_HEALTH_RETENTION_DAYS = 30
+
+
+@st.cache_data(ttl=SYSTEM_HEALTH_SAMPLE_INTERVAL_SECONDS, show_spinner=False)
+def collect_system_health_sample() -> Dict[str, Any]:
+    """5分間隔でシステムメトリクスを SQLite に保存する。"""
+    return ensure_system_health_sample(
+        sample_interval_seconds=SYSTEM_HEALTH_SAMPLE_INTERVAL_SECONDS,
+        retention_days=SYSTEM_HEALTH_RETENTION_DAYS,
+        disk_path="/app",
+    )
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def load_system_health_history(hours: int) -> List[Dict[str, Any]]:
+    since_utc = datetime.now(timezone.utc) - timedelta(hours=max(1, int(hours)))
+    return fetch_system_health_history(since_utc=since_utc)
+
+
+def _system_health_records_to_df(records: List[Dict[str, Any]]) -> pd.DataFrame:
+    if not records:
+        return pd.DataFrame(columns=["measured_at", "cpu_temp_c", "cpu_percent", "memory_percent", "disk_percent"])
+    df = pd.DataFrame(records)
+    df["measured_at"] = pd.to_datetime(df["measured_at"], utc=True, errors="coerce").dt.tz_convert(JST)
+    for col in ["cpu_temp_c", "cpu_percent", "memory_percent", "disk_percent"]:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+    return df.dropna(subset=["measured_at"]).sort_values("measured_at")
+
+
+def _downsample_df(df: pd.DataFrame, max_points: int) -> pd.DataFrame:
+    if len(df) <= max_points:
+        return df
+    step = max(1, (len(df) + max_points - 1) // max_points)
+    return df.iloc[::step].copy()
+
+
+def _get_system_health_ui_config() -> Dict[str, float]:
+    defaults: Dict[str, float] = {
+        "temp_warn_c": 60.0,
+        "temp_critical_c": 70.0,
+        "usage_warn_percent": 85.0,
+        "usage_critical_percent": 95.0,
+    }
+    try:
+        settings = load_settings()
+        cfg = (settings.get("system_health") or {}) if isinstance(settings, dict) else {}
+        ui_cfg = (cfg.get("ui") or {}) if isinstance(cfg, dict) else {}
+        for key, default_value in defaults.items():
+            raw = ui_cfg.get(key)
+            if raw is None:
+                continue
+            defaults[key] = float(raw)
+    except Exception:
+        pass
+    return defaults
+
+
+def _temp_color(temp_c: Any, cfg: Dict[str, float]) -> str:
+    try:
+        value = float(temp_c)
+    except (TypeError, ValueError):
+        return "#9ca3af"
+    if value > cfg["temp_critical_c"]:
+        return "#dc2626"
+    if value > cfg["temp_warn_c"]:
+        return "#d97706"
+    return "#16a34a"
+
+
+def _usage_color(percent: Any, cfg: Dict[str, float]) -> str:
+    try:
+        value = float(percent)
+    except (TypeError, ValueError):
+        return "#9ca3af"
+    if value >= cfg["usage_critical_percent"]:
+        return "#dc2626"
+    if value >= cfg["usage_warn_percent"]:
+        return "#d97706"
+    return "#16a34a"
+
+
+def _render_system_health_widget() -> None:
+    snapshot = collect_system_health_sample()
+    metrics = snapshot.get("latest") if isinstance(snapshot, dict) else None
+    if not isinstance(metrics, dict):
+        st.caption("システムヘルスの取得に失敗しました。")
+        return
+    cfg = _get_system_health_ui_config()
+    cpu_temp = metrics.get("cpu_temp_c")
+    temp_text = f"{cpu_temp:.1f}°C" if isinstance(cpu_temp, (int, float)) else "N/A"
+    cpu_percent = float(metrics.get("cpu_percent") or 0.0)
+    memory_percent = float(metrics.get("memory_percent") or 0.0)
+    disk_percent = float(metrics.get("disk_percent") or 0.0)
+
+    st.markdown(
+        f"""
+        <div style="border:1px solid #e5e7eb; border-radius:10px; padding:10px 12px; margin-top:6px; background:#ffffff;">
+            <div style="display:flex; justify-content:space-between; margin:2px 0; font-size:0.92rem;">
+                <span>CPU温度</span>
+                <span style="font-weight:700; color:{_temp_color(cpu_temp, cfg)};">{temp_text}</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin:2px 0; font-size:0.92rem;">
+                <span>CPU使用率</span>
+                <span style="font-weight:700; color:{_usage_color(cpu_percent, cfg)};">{cpu_percent:.1f}%</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin:2px 0; font-size:0.92rem;">
+                <span>メモリ使用率</span>
+                <span style="font-weight:700; color:{_usage_color(memory_percent, cfg)};">{memory_percent:.1f}%</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin:2px 0; font-size:0.92rem;">
+                <span>ディスク使用率</span>
+                <span style="font-weight:700; color:{_usage_color(disk_percent, cfg)};">{disk_percent:.1f}%</span>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.caption("保存: data/system_health.db / 間隔: 5分 / 保持: 30日")
+    if not isinstance(cpu_temp, (int, float)):
+        st.caption("CPU温度が取得できません。/sys/class/thermal のマウントと権限をご確認ください。")
 
 
 @st.cache_data(ttl=300, show_spinner=False)
@@ -450,6 +574,8 @@ def refresh_data(db_manager: DatabaseManager, user_id: str = "user_001"):
                 logger.info(f"SwitchBot fetch error: {e}")
         
         logger.info("=== refresh_data completed ===")
+        collect_system_health_sample.clear()
+        load_system_health_history.clear()
         load_footprint_from_parsed_tables.clear()
         st.success("✅ データを更新しました")
         st.rerun()
@@ -571,6 +697,10 @@ def main():
             else:
                 st.caption("raw_data_lake にデータがありません")
 
+        st.markdown("---")
+        st.markdown("### 🧰 Pi ヘルスチェック")
+        _render_system_health_widget()
+
     # 環境情報
     env_log = db_manager.get_latest_environmental_log()
     weather_info = st.session_state.get("latest_weather") or env_log
@@ -654,12 +784,13 @@ def main():
                 st.query_params.clear()
 
     # ── タブ化 UI ──
-    tab_summary, tab_intake, tab_sleep, tab_weight, tab_env = st.tabs([
+    tab_summary, tab_intake, tab_sleep, tab_weight, tab_env, tab_server = st.tabs([
         "📊 サマリー",
         "🥤 摂取ログ",
         "💤 睡眠詳細",
         "⚖️ 体重推移",
         "🌡️ 環境ログ",
+        "🖥️ サーバー・ヘルス",
     ])
 
     with tab_summary:
@@ -1301,6 +1432,125 @@ def main():
         except Exception as e:
             logger.warning(f"Deep Analytics error: {e}")
             st.caption("📊 分析データの取得中にエラーが発生しました。")
+
+    with tab_server:
+        st.subheader("🖥️ サーバー・ヘルス")
+        st.caption("保存先: data/system_health.db（SQLite, Supabaseとは完全分離）")
+
+        period_map = {
+            "24時間": 24,
+            "1週間": 24 * 7,
+            "1ヶ月": 24 * 30,
+        }
+        selected_period = st.radio(
+            "表示期間",
+            options=list(period_map.keys()),
+            horizontal=True,
+            index=0,
+            key="server_health_period",
+        )
+
+        # 表示時にも5分周期で最新サンプルを確保
+        collect_system_health_sample()
+
+        records = load_system_health_history(period_map[selected_period])
+        df_health = _system_health_records_to_df(records)
+
+        if df_health.empty:
+            st.info("システムヘルスデータがまだありません。数分後に再表示してください。")
+        else:
+            max_points = 720 if selected_period == "1ヶ月" else 2000
+            df_plot = _downsample_df(df_health, max_points=max_points)
+            cfg = _get_system_health_ui_config()
+
+            peak_temp = df_health["cpu_temp_c"].max(skipna=True)
+            avg_cpu = df_health["cpu_percent"].mean(skipna=True)
+            avg_memory = df_health["memory_percent"].mean(skipna=True)
+            avg_disk = df_health["disk_percent"].mean(skipna=True)
+
+            k1, k2, k3, k4 = st.columns(4)
+            with k1:
+                if pd.notna(peak_temp):
+                    st.metric("最高温度", f"{float(peak_temp):.1f}°C")
+                else:
+                    st.metric("最高温度", "N/A")
+            with k2:
+                st.metric("平均CPU負荷", f"{float(avg_cpu):.1f}%")
+            with k3:
+                st.metric("平均メモリ", f"{float(avg_memory):.1f}%")
+            with k4:
+                st.metric("平均ディスク", f"{float(avg_disk):.1f}%")
+
+            fig_temp = go.Figure()
+            fig_temp.add_trace(go.Scatter(
+                x=df_plot["measured_at"],
+                y=df_plot["cpu_temp_c"],
+                name="CPU温度",
+                mode="lines",
+                line=dict(color="#ef4444", width=2.5),
+                hovertemplate="%{x|%m/%d %H:%M}<br>CPU温度: %{y:.1f}°C<extra></extra>",
+            ))
+            fig_temp.add_hline(
+                y=cfg["temp_warn_c"],
+                line_width=1,
+                line_dash="dash",
+                line_color="#d97706",
+                annotation_text=f"警告 {cfg['temp_warn_c']:.0f}°C",
+                annotation_position="top left",
+            )
+            fig_temp.add_hline(
+                y=cfg["temp_critical_c"],
+                line_width=1,
+                line_dash="dash",
+                line_color="#dc2626",
+                annotation_text=f"危険 {cfg['temp_critical_c']:.0f}°C",
+                annotation_position="top left",
+            )
+            fig_temp.update_layout(
+                height=280,
+                margin=dict(l=0, r=0, t=20, b=0),
+                xaxis=dict(title=""),
+                yaxis=dict(title="温度 (°C)"),
+                hovermode="x unified",
+            )
+            st.plotly_chart(fig_temp, use_container_width=True)
+
+            fig_usage = go.Figure()
+            fig_usage.add_trace(go.Scatter(
+                x=df_plot["measured_at"],
+                y=df_plot["cpu_percent"],
+                name="CPU",
+                mode="lines",
+                line=dict(color="#2563eb", width=2.2),
+            ))
+            fig_usage.add_trace(go.Scatter(
+                x=df_plot["measured_at"],
+                y=df_plot["memory_percent"],
+                name="Memory",
+                mode="lines",
+                line=dict(color="#0891b2", width=2.2),
+            ))
+            fig_usage.add_trace(go.Scatter(
+                x=df_plot["measured_at"],
+                y=df_plot["disk_percent"],
+                name="Disk",
+                mode="lines",
+                line=dict(color="#4f46e5", width=2.2),
+            ))
+            fig_usage.update_layout(
+                height=300,
+                margin=dict(l=0, r=0, t=10, b=0),
+                xaxis=dict(title=""),
+                yaxis=dict(title="使用率 (%)", range=[0, 100]),
+                hovermode="x unified",
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
+            )
+            st.plotly_chart(fig_usage, use_container_width=True)
+
+            if len(df_plot) < len(df_health):
+                st.caption(f"1ヶ月表示の見やすさのため、{len(df_health)}点 → {len(df_plot)}点に間引いて表示しています。")
+            else:
+                st.caption(f"表示ポイント数: {len(df_plot)}")
 
 
 if __name__ == "__main__":

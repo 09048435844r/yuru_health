@@ -29,6 +29,16 @@ google_fit:
       - "wake"
       - "覚醒"
 
+# Raspberry Pi ヘルスチェック表示設定（サイドバー）
+system_health:
+  cache:
+    ttl_seconds: 180
+  ui:
+    temp_warn_c: 60
+    temp_critical_c: 70
+    usage_warn_percent: 85
+    usage_critical_percent: 95
+
 # ── ハッシュガード設定 (参考情報) ──
 # DatabaseManager._VOLATILE_KEYS で定義されている除外キー:
 #   dt, t, time, timestamp, ts, server_time,

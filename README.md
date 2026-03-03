@@ -38,6 +38,7 @@
 | **Parse-only Rebuild** | `python -m src.main --parse-only --days N` で `raw_data_lake` から parsed テーブルを再構築 |
 | **Google Fit Sleep Normalizer** | 睡眠を Union + Awake 除外 + source_policy で正規化し、`chosen_app` を保存 |
 | **Raw Data View** | サイドバーのチェックボックスで `raw_data_lake` 最新 100 件を表示 |
+| **Server Health Monitor (SQLite)** | Raspberry Pi の CPU温度/CPU・メモリ・ディスク使用率を `data/system_health.db` に 5分間隔保存（30日ローテーション） |
 | **Data Lake** | 全ソースの生 JSON を `raw_data_lake` に一元保存 |
 
 ## 📁 プロジェクト構成
@@ -160,7 +161,27 @@ python -m src.main --auto
 
 # raw_data_lake から再パース（外部API取得なし）
 python -m src.main --parse-only --days 7
+
+# サーバーヘルス専用ワーカー（UI未アクセス時も5分間隔で収集）
+python -m src.system_health_worker
 ```
+
+### 1-1. Docker Compose で常駐起動（推奨）
+
+```bash
+docker compose up -d --build
+docker compose ps
+```
+
+- `app`: Streamlit UI
+- `worker`: 既存の外部データ取得バッチ
+- `system_health_worker`: Raspberry Pi ヘルス専用収集（SQLite）
+
+`system_health_worker` の主要環境変数（`docker-compose.yml`）:
+
+- `SYSTEM_HEALTH_INTERVAL_SECONDS` (default: `300`)
+- `SYSTEM_HEALTH_RETENTION_DAYS` (default: `30`)
+- `SYSTEM_HEALTH_DISK_PATH` (default: `/app`)
 
 ### 2. 環境変数 (推奨)
 

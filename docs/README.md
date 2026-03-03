@@ -11,7 +11,7 @@ YuruHealth の運用・連携ドキュメント一覧です。
 - [Google Fit OAuth 復旧・運用 Runbook](./GOOGLE_FIT_OAUTH_RUNBOOK.md)
   - `invalid_grant` 復旧、再認証、欠損回復、睡眠正規化（Union/Awake除外/source_policy）
 - [Operations Playbook](./OPERATIONS_PLAYBOOK.md)
-  - 日次運用、障害時の切り分け、確認コマンド
+  - 日次運用、障害時の切り分け、確認コマンド（Raspberry Pi の SQLite サーバーヘルス監視含む）
 - [Intake Logging 運用マニュアル](./operations_intake_logging.md)
   - 摂取ログのGitOps運用、YAML変更手順、プリセット/成分更新（1単位あたり + `default_quantity` モデル）
 - [Secrets & Config Guide](./SECRETS_CONFIGURATION.md)

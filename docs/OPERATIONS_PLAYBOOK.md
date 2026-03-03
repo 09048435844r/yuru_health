@@ -29,6 +29,35 @@ print('environmental_logs.latest=', latest('environmental_logs','timestamp'))
 PY
 ```
 
+### 1-3. Raspberry Pi システム監視（SQLite）
+
+システム監視は Supabase と分離され、`data/system_health.db` に保存されます。
+
+確認手順:
+
+```bash
+docker compose ps system_health_worker
+docker compose logs --tail=50 system_health_worker
+
+python - <<'PY'
+import sqlite3
+conn = sqlite3.connect('data/system_health.db')
+row = conn.execute(
+    "SELECT measured_at, cpu_temp_c, cpu_percent, memory_percent, disk_percent "
+    "FROM system_health_logs ORDER BY measured_at DESC LIMIT 1"
+).fetchone()
+print('latest_system_health=', row)
+count = conn.execute("SELECT COUNT(*) FROM system_health_logs").fetchone()[0]
+print('rows=', count)
+conn.close()
+PY
+```
+
+期待値:
+
+- 約5分ごとに最新行が更新される
+- 30日を超える古いデータは自動削除される
+
 ---
 
 ## 2. ローカル再現（最短）
@@ -101,6 +130,20 @@ Google Fit 睡眠の追加確認:
 
 - `google_fit_data.data_type='sleep'` の `raw_data.chosen_app` が入っているか
 - 値が常識範囲（目安: 240〜600分）か
+
+### D. Raspberry Pi 監視データが更新されない
+
+シグナル:
+
+- `system_health_worker` が停止している
+- UI の「サーバー・ヘルス」タブにデータが出ない
+
+対応:
+
+1. `docker compose ps system_health_worker` で状態確認
+2. `docker compose logs --tail=100 system_health_worker` で例外確認
+3. `/sys` `/proc` の read-only マウント確認（`docker-compose.yml`）
+4. `data/system_health.db` の最新 `measured_at` が進んでいるか確認
 
 ---
 

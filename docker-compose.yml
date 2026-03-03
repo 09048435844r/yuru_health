@@ -11,9 +11,12 @@ services:
       - dist/.env.production
     volumes:
       - .:/app
+      - /sys:/host_sys:ro
+      - /proc:/host_proc:ro
     environment:
       TZ: ${TZ:-Asia/Tokyo}
       PYTHONUNBUFFERED: ${PYTHONUNBUFFERED:-1}
+      PSUTIL_PROCFS_PATH: ${PSUTIL_PROCFS_PATH:-/host_proc}
     ports:
       - "8501:8501"
     command: >
@@ -42,26 +45,33 @@ services:
       - dist/.env.production
     volumes:
       - .:/app
+      - /sys:/host_sys:ro
+      - /proc:/host_proc:ro
     environment:
       TZ: ${TZ:-Asia/Tokyo}
       PYTHONUNBUFFERED: ${PYTHONUNBUFFERED:-1}
       FETCH_INTERVAL_SECONDS: ${FETCH_INTERVAL_SECONDS:-900}
-    command:
-      - /bin/sh
-      - -ec
-      - |
-        interval="$${FETCH_INTERVAL_SECONDS:-900}"
-        case "$${interval}" in
-          ''|*[!0-9]*)
-            echo "[worker] invalid FETCH_INTERVAL_SECONDS='$${interval}', fallback to 900"
-            interval=900
-            ;;
-        esac
+      SYSTEM_HEALTH_INTERVAL_SECONDS: ${SYSTEM_HEALTH_INTERVAL_SECONDS:-300}
+      SYSTEM_HEALTH_RETENTION_DAYS: ${SYSTEM_HEALTH_RETENTION_DAYS:-30}
+      SYSTEM_HEALTH_DISK_PATH: ${SYSTEM_HEALTH_DISK_PATH:-/app}
+      PSUTIL_PROCFS_PATH: ${PSUTIL_PROCFS_PATH:-/host_proc}
+    command: ["/app/scripts/worker_with_health.sh"]
 
-        while true; do
-          echo "[worker] $$(date -Iseconds) start fetch"
-          python -m src.main --auto
-          rc=$$?
-          echo "[worker] $$(date -Iseconds) done rc=$${rc}"
-          sleep "$${interval}"
-        done
+  system_health_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: yuruhealth_system_health_worker
+    restart: unless-stopped
+    volumes:
+      - .:/app
+      - /sys:/host_sys:ro
+      - /proc:/host_proc:ro
+    environment:
+      TZ: ${TZ:-Asia/Tokyo}
+      PYTHONUNBUFFERED: ${PYTHONUNBUFFERED:-1}
+      PSUTIL_PROCFS_PATH: ${PSUTIL_PROCFS_PATH:-/host_proc}
+      SYSTEM_HEALTH_INTERVAL_SECONDS: ${SYSTEM_HEALTH_INTERVAL_SECONDS:-300}
+      SYSTEM_HEALTH_RETENTION_DAYS: ${SYSTEM_HEALTH_RETENTION_DAYS:-30}
+      SYSTEM_HEALTH_DISK_PATH: ${SYSTEM_HEALTH_DISK_PATH:-/app}
+    command: python -m src.system_health_worker
