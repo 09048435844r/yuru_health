@@ -11,6 +11,18 @@ YuruHealth データパイプラインの日次運用・障害対応手順です
 - GitHub Actions `periodic_fetch.yml` の最新実行を確認
 - 失敗時はログの `fetch done | ...` と `error` 行を確認
 
+ローカル worker（Raspberry Pi）運用時は、取得周期も確認します。
+
+```bash
+docker compose exec worker printenv FETCH_INTERVAL_SECONDS
+docker compose logs worker --since=30m | grep -E "start fetch|done rc|fetch done"
+```
+
+期待値:
+
+- `FETCH_INTERVAL_SECONDS=900`（15分）
+- `start fetch` が概ね15分周期（再起動直後の過渡は除く）
+
 ### 1-2. DB鮮度確認（Read-Only）
 
 ```bash
@@ -79,6 +91,11 @@ python -m src.main --parse-only --days 7
 - 外部API取得は行わず、`raw_data_lake` から parsed テーブルを再構築
 - Google Fit 睡眠は Union + Awake除外 + source_policy で再計算
 
+補足（SwitchBot / Weather の再構築）:
+
+- parse-only は環境ログ再構築時に `fetched_at` 優先で timestamp 化する
+- 同日内の複数データ点が保持され、足跡スパークラインの点数不足を回避しやすい
+
 ---
 
 ## 3. 障害種別ごとの切り分け
@@ -130,6 +147,11 @@ Google Fit 睡眠の追加確認:
 
 - `google_fit_data.data_type='sleep'` の `raw_data.chosen_app` が入っているか
 - 値が常識範囲（目安: 240〜600分）か
+
+SwitchBot 足跡の追加確認:
+
+- 足跡最下段（SwitchBot）は **CO2(ppm)** スパークライン表示
+- `environmental_logs.source='switchbot'` の当日 CO2 データ点が 2 点以上あるか
 
 ### D. Raspberry Pi 監視データが更新されない
 
