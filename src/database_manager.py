@@ -213,20 +213,26 @@ class DatabaseManager:
     
     def insert_google_fit_data(self, user_id: str, date: str, data_type: str,
                                value: Any, raw_data: Any):
+        parsed_raw = self._parse_raw_data(raw_data)
         existing = (
             self.supabase.table("google_fit_data")
             .select("id").eq("user_id", user_id).eq("date", date).eq("data_type", data_type)
             .limit(1).execute()
         )
         if existing.data:
-            logger.info(f"Skipped duplicate for google_fit_data: {date} ({data_type})")
+            existing_id = existing.data[0].get("id")
+            self.supabase.table("google_fit_data").update({
+                "value": value,
+                "raw_data": parsed_raw,
+            }).eq("id", existing_id).execute()
+            logger.info(f"Updated google_fit_data: {date} ({data_type})")
             return
         data = {
             "user_id": user_id,
             "date": date,
             "data_type": data_type,
             "value": value,
-            "raw_data": self._parse_raw_data(raw_data),
+            "raw_data": parsed_raw,
         }
         self.supabase.table("google_fit_data").insert(data).execute()
     
@@ -240,30 +246,38 @@ class DatabaseManager:
         response = query.execute()
         return response.data
 
-    def get_latest_google_fit_date(self, user_id: str = "user_001") -> Optional[str]:
-        response = (
+    def get_latest_google_fit_date(self, user_id: str = "user_001", data_type: Optional[str] = None) -> Optional[str]:
+        query = (
             self.supabase.table("google_fit_data")
             .select("date")
             .eq("user_id", user_id)
-            .order("date", desc=True)
-            .limit(1)
-            .execute()
         )
+        if data_type:
+            query = query.eq("data_type", data_type)
+        response = query.order("date", desc=True).limit(1).execute()
         if not response.data:
             return None
         latest_date = response.data[0].get("date")
         return str(latest_date) if latest_date else None
 
-    def get_google_fit_dates(self, user_id: str, start_date: str, end_date: str) -> set[str]:
+    def get_google_fit_dates(
+        self,
+        user_id: str,
+        start_date: str,
+        end_date: str,
+        data_type: Optional[str] = None,
+    ) -> set[str]:
         """指定期間の Google Fit データ日付 (YYYY-MM-DD) を返す。"""
-        response = (
+        query = (
             self.supabase.table("google_fit_data")
             .select("date")
             .eq("user_id", user_id)
             .gte("date", start_date)
             .lte("date", end_date)
-            .execute()
         )
+        if data_type:
+            query = query.eq("data_type", data_type)
+        response = query.execute()
         dates: set[str] = set()
         for row in response.data or []:
             date_value = row.get("date")

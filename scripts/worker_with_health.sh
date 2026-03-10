@@ -33,6 +33,7 @@ echo "[worker] Starting with fetch_interval=${FETCH_INTERVAL}s health_interval=$
 
 # Track last health collection time
 last_health=0
+last_fetch=0
 
 while true; do
     now=$(date +%s)
@@ -45,10 +46,13 @@ while true; do
     fi
 
     # Run main fetchers
-    echo "[worker] $(date -Iseconds) start fetch"
-    python -m src.main --auto
-    rc=$?
-    echo "[worker] $(date -Iseconds) done rc=$rc"
+    if [ $((now - last_fetch)) -ge "$FETCH_INTERVAL" ]; then
+        echo "[worker] $(date -Iseconds) start fetch"
+        python -m src.main --auto
+        rc=$?
+        echo "[worker] $(date -Iseconds) done rc=$rc"
+        last_fetch=$(date +%s)
+    fi
     
     sleep 60  # Check every minute for health collection
 done

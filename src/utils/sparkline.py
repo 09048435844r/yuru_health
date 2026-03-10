@@ -75,10 +75,10 @@ def render_sparkline_cell(rich_data: Optional[Dict[str, Any]], source: str) -> s
     summary = rich_data.get("summary", {})
 
     if source == "switchbot":
-        temps = [p["temp"] for p in ts if p.get("temp") is not None]
-        color = "#FF7043"
-        bg = "rgba(255,112,67,0.08)"
-        label = f'{summary.get("temp_avg", "--")}°' if summary.get("temp_avg") else ""
+        temps = [p["co2"] for p in ts if p.get("co2") is not None]
+        color = "#66BB6A"
+        bg = "rgba(102,187,106,0.10)"
+        label = f'{summary.get("co2_avg", "--")}ppm' if summary.get("co2_avg") is not None else ""
     elif source == "weather":
         temps = [p["temp"] for p in ts if p.get("temp") is not None]
         color = "#42A5F5"

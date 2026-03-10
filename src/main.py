@@ -693,7 +693,7 @@ def run_all_parsers(days: Optional[int] = None):
             timestamp = datetime.fromtimestamp(float(dt_unix), tz=JST).isoformat()
         else:
             fallback_dt = datetime.now(JST)
-            timestamp = _to_jst_iso(row.get("recorded_at") or row.get("fetched_at"), fallback_dt)
+            timestamp = _to_jst_iso(row.get("fetched_at") or row.get("recorded_at"), fallback_dt)
         if not _in_window(timestamp, start_date, end_date):
             continue
         weather_desc = payload.get("weather", [{}])[0].get("description", "不明")
@@ -725,7 +725,7 @@ def run_all_parsers(days: Optional[int] = None):
         if not isinstance(payload, dict):
             continue
         fallback_dt = datetime.now(JST)
-        timestamp = _to_jst_iso(row.get("recorded_at") or row.get("fetched_at"), fallback_dt)
+        timestamp = _to_jst_iso(row.get("fetched_at") or row.get("recorded_at"), fallback_dt)
         if not _in_window(timestamp, start_date, end_date):
             continue
         db_manager.insert_environmental_log(
@@ -764,7 +764,12 @@ def run_all_fetchers(days: Optional[int] = None):
     window_start_str = (end_dt - timedelta(days=max(0, lookback_days))).strftime("%Y-%m-%d")
     oura_existing_dates = db_manager.get_oura_dates(USER_ID, window_start_str, end_str)
     withings_existing_dates = db_manager.get_weight_dates(USER_ID, window_start_str, end_str)
-    google_fit_existing_dates = db_manager.get_google_fit_dates(USER_ID, window_start_str, end_str)
+    google_fit_existing_dates = db_manager.get_google_fit_dates(
+        USER_ID,
+        window_start_str,
+        end_str,
+        data_type="steps",
+    )
 
     oura_start_str = _resolve_start_date(
         db_manager.get_latest_oura_measured_at(USER_ID),
@@ -779,7 +784,7 @@ def run_all_fetchers(days: Optional[int] = None):
         lookback_days=lookback_days,
     )
     google_fit_start_str = _resolve_start_date(
-        db_manager.get_latest_google_fit_date(USER_ID),
+        db_manager.get_latest_google_fit_date(USER_ID, data_type="steps"),
         google_fit_existing_dates,
         end_dt,
         lookback_days=lookback_days,
