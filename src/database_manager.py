@@ -35,6 +35,36 @@ def _to_jst_hour(iso_str: str) -> int:
     return _to_jst(iso_str).hour
 
 
+def _extract_switchbot_value(payload: Dict[str, Any], key: str) -> Optional[Any]:
+    """Extract value from SwitchBot payload, handling both flat and nested formats.
+    
+    Supports:
+    - Flat format (current API): {"CO2": 400, "temperature": 16.1, "humidity": 37, ...}
+    - Nested format (legacy): {"body": {"CO2": 400, "temperature": 16.1, ...}}
+    
+    Args:
+        payload: Raw payload dict from raw_data_lake
+        key: Field name to extract (e.g., "temperature", "humidity", "CO2")
+    
+    Returns:
+        Extracted value or None if not found
+    """
+    if not isinstance(payload, dict):
+        return None
+    
+    # Try flat format first (current API format)
+    value = payload.get(key)
+    if value is not None:
+        return value
+    
+    # Fallback: check if nested under "body" key (legacy format)
+    body = payload.get("body")
+    if isinstance(body, dict):
+        return body.get(key)
+    
+    return None
+
+
 class DatabaseManager:
     def __init__(self, secrets_path: str = "config/secrets.yaml"):
         self.secrets = load_secrets(secrets_path)
@@ -452,9 +482,9 @@ class DatabaseManager:
             if source == "switchbot":
                 timeseries.append({
                     "hour": hour,
-                    "temp": payload.get("temperature"),
-                    "humidity": payload.get("humidity"),
-                    "co2": payload.get("CO2"),
+                    "temp": _extract_switchbot_value(payload, "temperature"),
+                    "humidity": _extract_switchbot_value(payload, "humidity"),
+                    "co2": _extract_switchbot_value(payload, "CO2"),
                 })
             elif source == "weather":
                 main = payload.get("main", {})
@@ -689,9 +719,9 @@ class DatabaseManager:
                 continue
             env_rows.append({
                 "date": date_str,
-                "co2": payload.get("CO2"),
-                "temp": payload.get("temperature"),
-                "humidity": payload.get("humidity"),
+                "co2": _extract_switchbot_value(payload, "CO2"),
+                "temp": _extract_switchbot_value(payload, "temperature"),
+                "humidity": _extract_switchbot_value(payload, "humidity"),
             })
 
         if not env_rows:

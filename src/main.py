@@ -394,7 +394,7 @@ def _clear_parsed_tables_in_window(db_manager, start_date: datetime.date, end_da
 
 def run_all_parsers(days: Optional[int] = None):
     """raw_data_lake の既存データのみを使って再パースし、各データテーブルを再構築する。"""
-    from src.database_manager import DatabaseManager
+    from src.database_manager import DatabaseManager, _extract_switchbot_value
 
     db_manager = DatabaseManager()
     sleep_parser_cfg = _load_google_fit_sleep_parser_settings()
@@ -734,9 +734,9 @@ def run_all_parsers(days: Optional[int] = None):
             latitude=None,
             longitude=None,
             weather_summary="switchbot_indoor",
-            temp=payload.get("temperature"),
-            humidity=payload.get("humidity"),
-            pressure=payload.get("atmosphericPressure"),
+            temp=_extract_switchbot_value(payload, "temperature"),
+            humidity=_extract_switchbot_value(payload, "humidity"),
+            pressure=_extract_switchbot_value(payload, "atmosphericPressure"),
             raw_data=payload,
         )
         results["SwitchBot"] += 1

@@ -1,0 +1,46 @@
+# YuruHealth - AI Agent Rules (Cascade)
+
+## 1. Language & Communication Policy (推論精度とUXの両立)
+- **User Communication (日本語):** ユーザーへの説明、提案のサマリー、確認事項、レポートなどの「対話」はすべて **日本語** で行うこと。
+- **Code & Logic (英語):** 推論精度とコーディングの質を最高レベルに保つため、以下の項目は **英語** を使用すること。
+  - コード内のコメント、関数名、変数名
+  - Gitのコミットメッセージ
+  - 複雑なロジックを設計・推論する際の内部的な思考プロセス（Chain of Thought）
+
+## 2. Project Philosophy (開発哲学)
+- **Health Data First:** 健康データの正確性と信頼性を最優先とし、誤った情報提供を防ぐこと。
+- **Privacy by Design:** ユーザーの健康情報は機密性が高いため、セキュリティとプライバシーを設計段階から考慮すること。
+- **Append-Only:** ログやデータは既存データを破壊・上書きせず、JSONL等の形式で「追記」していくこと。
+- **Future-Proof:** インターフェース単位で差し替え可能な疎結合（Clean Architecture）を維持すること。
+
+## 3. Tech Stack & Environment
+- Python 3.10+
+- 常に `config.yaml` を駆動元（Config Driven）とし、ソースコードへのハードコードを避けること。
+
+# ==========================================
+# Subprocess & Background Task Policy
+# （外部コマンド・バックグラウンド処理に関するルール）
+#
+# 【このルールの目的】
+# AIが subprocess.run などを使う際、良かれと思って stdout=PIPE などを指定し
+# ターミナルの出力を隠してしまう（ブラックボックス化する）手癖を防ぐため。
+# ログが隠されると、テストなど数分かかる処理の最中にシステムがフリーズしたと
+# 誤認してしまうため、必ずリアルタイムで画面に経過を出すよう強制します。
+# ==========================================
+When writing Python scripts, Git hooks, or shell commands that execute external processes (e.g., using `subprocess.run`), NEVER hide, capture, or pipe the standard output/error unless explicitly instructed to do so.
+- AVOID using `stdout=subprocess.PIPE`, `stderr=subprocess.PIPE`, or `capture_output=True`.
+- ALWAYS allow outputs to stream directly to the terminal in real-time. This ensures the user can monitor progress and prevents long-running tasks from appearing as system freezes.
+
+
+# ==========================================
+# Project Context Policy
+# （プロジェクト文脈に関するルール）
+#
+# 【このルールの目的】
+# AIがコードを生成する際、現在のプロジェクトが「YuruHealth（ゆるヘルス健康管理システム）」であることを常に認識させ、
+# 「Auto Radio Generator」などの他のプロジェクトに関連する処理を誤って生成しないようにするため。
+# ==========================================
+【重要】
+現在のプロジェクトは「YuruHealth（ゆるヘルス健康管理システム）」です。
+もしユーザーの指示が「Auto Radio Generator」など、他のプロジェクトに関連する処理に見える場合は、コードを変更する前に必ず「対象プロジェクトが間違っていないか」を確認してください。
+
