@@ -40,50 +40,60 @@ class GoogleFitFetcher:
                     end_date: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         歩数データを取得 (com.google.step_count.delta)
+        JST基準で各日の00:00:00〜23:59:59を明示的に指定して取得
+        dataset APIを使用して生データを取得し、日別に集計
         """
         start_dt, end_dt = self._parse_date_range(start_date, end_date)
         
-        body = {
-            "aggregateBy": [{
-                "dataTypeName": "com.google.step_count.delta",
-                "dataSourceId": "derived:com.google.step_count.delta:com.google.android.gms:estimated_steps"
-            }],
-            "bucketByTime": {"durationMillis": 86400000},  # 1日ごと
-            "startTimeMillis": self._time_millis(start_dt),
-            "endTimeMillis": self._time_millis(end_dt),
-        }
+        results = []
+        current_date = start_dt.date()
+        end_date_obj = end_dt.date()
         
-        try:
-            response = self.fitness_service.users().dataset().aggregate(
-                userId="me", body=body
-            ).execute()
+        # Iterate through each day in the range
+        while current_date <= end_date_obj:
+            # Define JST-based day boundaries: 00:00:00 to 23:59:59
+            day_start = datetime.combine(current_date, datetime.min.time(), tzinfo=_JST)
+            day_end = datetime.combine(current_date, datetime.max.time(), tzinfo=_JST)
             
-            # Data Lake: 生データを解析前に保存
-            self._save_to_data_lake(user_id, response, "steps")
+            # Use dataset API instead of aggregate API to get raw data points
+            data_source = "derived:com.google.step_count.delta:com.google.android.gms:estimated_steps"
+            dataset_id = f"{self._time_millis(day_start) * 1000000}-{self._time_millis(day_end) * 1000000}"
             
-            results = []
-            for bucket in response.get("bucket", []):
-                bucket_start = datetime.fromtimestamp(
-                    int(bucket["startTimeMillis"]) / 1000
-                ).strftime("%Y-%m-%d")
+            try:
+                response = self.fitness_service.users().dataSources().datasets().get(
+                    userId="me",
+                    dataSourceId=data_source,
+                    datasetId=dataset_id,
+                ).execute()
                 
+                # Data Lake: Save raw response for this day
+                self._save_to_data_lake(user_id, response, "steps")
+                
+                # Extract and sum all step counts from data points
                 steps = 0
-                for dataset in bucket.get("dataset", []):
-                    for point in dataset.get("point", []):
-                        for val in point.get("value", []):
-                            steps += val.get("intVal", 0)
+                for point in response.get("point", []):
+                    for val in point.get("value", []):
+                        steps += val.get("intVal", 0)
                 
+                # Store result with explicit date
                 results.append({
                     "user_id": user_id,
-                    "date": bucket_start,
+                    "date": current_date.strftime("%Y-%m-%d"),
                     "data_type": "steps",
                     "value": steps,
-                    "raw_data": json.dumps(bucket),
+                    "raw_data": json.dumps({"point": response.get("point", [])[:10]}),  # Store first 10 points as sample
                 })
+                
+                logger.info(f"Google Fit steps for {current_date}: {steps} steps ({len(response.get('point', []))} data points)")
+                
+            except Exception as e:
+                logger.warning(f"Google Fit steps fetch failed for {current_date}: {e}")
+                # Continue to next day even if one day fails
             
-            return results
-        except Exception as e:
-            raise Exception(f"Google Fit 歩数取得エラー: {e}")
+            # Move to next day
+            current_date += timedelta(days=1)
+        
+        return results
     
     def fetch_weight(self, user_id: str, start_date: Optional[str] = None,
                      end_date: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -164,6 +174,33 @@ class GoogleFitFetcher:
             return results
         except Exception as e:
             raise Exception(f"Google Fit 睡眠取得エラー: {e}")
+    
+    def fetch_steps_finalized(self, user_id: str, target_date: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """
+        前日の確定歩数データを取得（深夜0:30以降の確定値取得用）
+        
+        Args:
+            user_id: ユーザーID
+            target_date: 取得対象日（YYYY-MM-DD形式）。Noneの場合は前日
+        
+        Returns:
+            確定歩数データ、または取得失敗時はNone
+        """
+        if target_date:
+            target_dt = datetime.strptime(target_date, "%Y-%m-%d").date()
+        else:
+            # Default to previous day
+            target_dt = (datetime.now(_JST) - timedelta(days=1)).date()
+        
+        # Fetch only the target day
+        results = self.fetch_steps(user_id, target_dt.strftime("%Y-%m-%d"), target_dt.strftime("%Y-%m-%d"))
+        
+        if results:
+            logger.info(f"Google Fit finalized steps for {target_dt}: {results[0].get('value')} steps")
+            return results[0]
+        else:
+            logger.warning(f"Google Fit finalized steps fetch failed for {target_dt}")
+            return None
     
     def fetch_all(self, user_id: str, start_date: Optional[str] = None,
                   end_date: Optional[str] = None) -> Dict[str, List[Dict[str, Any]]]:

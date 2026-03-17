@@ -900,6 +900,8 @@ def run_all_fetchers(days: Optional[int] = None):
             )
             return "skip"
         gfit = GoogleFitFetcher(creds, db_manager=db_manager)
+        
+        # Regular fetch for date range
         fit_data = gfit.fetch_all(USER_ID, google_fit_start_str, end_str)
         saved = 0
         for records in fit_data.values():
@@ -912,6 +914,24 @@ def run_all_fetchers(days: Optional[int] = None):
                     raw_data=record["raw_data"],
                 )
                 saved += 1
+        
+        # Daily finalization: fetch previous day's confirmed data at 00:30 JST
+        current_hour = datetime.now(JST).hour
+        current_minute = datetime.now(JST).minute
+        if current_hour == 0 and current_minute >= 30 and current_minute < 45:
+            logger.info("Google Fit: fetching previous day's finalized steps data")
+            finalized = gfit.fetch_steps_finalized(USER_ID)
+            if finalized:
+                db_manager.insert_google_fit_data(
+                    user_id=finalized["user_id"],
+                    date=finalized["date"],
+                    data_type=finalized["data_type"],
+                    value=finalized["value"],
+                    raw_data=finalized["raw_data"],
+                )
+                logger.info(f"Google Fit: finalized steps for {finalized['date']}: {finalized['value']} steps")
+                saved += 1
+        
         return saved
     results["GoogleFit"] = _run_fetcher("GoogleFit", fetch_google_fit)
 
