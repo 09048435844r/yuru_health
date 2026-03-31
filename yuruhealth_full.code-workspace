@@ -1,0 +1,17 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../yuru_health_web"
+		}
+	],
+	"settings": {
+		"workbench.colorCustomizations": {
+			"titleBar.activeBackground": "#2E8B57",
+			"titleBar.inactiveBackground": "#2E8B5799",
+			"titleBar.activeForeground": "#FFFFFF"
+		}
+	}
+}
